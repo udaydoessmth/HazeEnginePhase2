@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 // Scale notes for different keys/scales
 const SCALES = {
@@ -46,7 +47,9 @@ const DEFAULT_INSTRUMENTS = {
   drums: 'drums',
 }
 
-export const useDawStore = create((set, get) => ({
+export const useDawStore = create(
+  persist(
+    (set, get) => ({
   // Track metadata
   trackId: null,
   trackTitle: 'Untitled Track',
@@ -208,6 +211,21 @@ export const useDawStore = create((set, get) => ({
   setTrackId: (id) => set({ trackId: id }),
   setProjectId: (id) => set({ projectId: id }),
   markClean: () => set({ isDirty: false }),
-}))
+    }),
+    {
+      name: 'haze-daw-store',
+      partialize: (state) => ({
+        trackId: state.trackId,
+        trackTitle: state.trackTitle,
+        projectId: state.projectId,
+        tempo: state.tempo,
+        scale: state.scale,
+        rootNote: state.rootNote,
+        instruments: state.instruments,
+        patterns: state.patterns,
+      }),
+    }
+  )
+)
 
 export { SCALES, NOTES, DRUM_ROWS, STEPS, OCTAVE_RANGE, generatePitchRows }

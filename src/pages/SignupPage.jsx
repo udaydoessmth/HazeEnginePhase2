@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { signUp, isSupabaseConfigured } from '../lib/supabase'
@@ -9,27 +9,37 @@ export default function SignupPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const isSubmitting = useRef(false)
   const { localLogin } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    // Strict request lock to prevent duplicate calls from double-clicks or re-renders
+    if (isSubmitting.current) return
+    
+    console.count("signup called")
+    
+    isSubmitting.current = true
     setError('')
     setLoading(true)
 
-    if (isSupabaseConfigured()) {
-      const { error: err } = await signUp(email, password, username)
-      if (err) {
-        setError(err.message)
-        setLoading(false)
-        return
+    try {
+      if (isSupabaseConfigured()) {
+        const { error: err } = await signUp(email, password, username)
+        if (err) {
+          setError(err.message)
+          return
+        }
+      } else {
+        localLogin(email, username)
       }
-    } else {
-      localLogin(email, username)
+      navigate('/dashboard')
+    } finally {
+      isSubmitting.current = false
+      setLoading(false)
     }
-
-    setLoading(false)
-    navigate('/dashboard')
   }
 
   return (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useSceneStore } from '../stores/sceneStore'
 import SceneList from '../components/GameEngine/SceneList'
@@ -11,66 +11,84 @@ import AudioTrackPicker from '../components/GameEngine/AudioTrackPicker'
 export default function SceneEditor() {
   const { projectId } = useParams()
   const navigate = useNavigate()
-  const {
-    scenes, activeSceneId, isDirty, previewMode,
-    setScenes, addScene, setActiveScene, updateScene,
-    startPreview, stopPreview, markClean,
-  } = useSceneStore()
+
+  // Pull store values individually to avoid unnecessary re-renders
+  const scenes = useSceneStore(s => s.scenes)
+  const activeSceneId = useSceneStore(s => s.activeSceneId)
+  const isDirty = useSceneStore(s => s.isDirty)
+  const previewMode = useSceneStore(s => s.previewMode)
+  const loadProject = useSceneStore(s => s.loadProject)
+  const addScene = useSceneStore(s => s.addScene)
+  const setActiveScene = useSceneStore(s => s.setActiveScene)
+  const updateScene = useSceneStore(s => s.updateScene)
+  const startPreview = useSceneStore(s => s.startPreview)
+  const stopPreview = useSceneStore(s => s.stopPreview)
+  const saveScenes = useSceneStore(s => s.saveScenes)
 
   const [projectTitle, setProjectTitle] = useState('Untitled Project')
   const [saving, setSaving] = useState(false)
-  const [tab, setTab] = useState('dialogue') // dialogue | choices | settings
+  const [tab, setTab] = useState('dialogue')
   const [showAudioPicker, setShowAudioPicker] = useState(false)
-  const [audioTracks, setAudioTracks] = useState([])
+  const [uploading, setUploading] = useState(false)
 
-  // Load scenes
+  // Refs for save-on-unmount (avoids stale closures)
+  const isDirtyRef = useRef(false)
+  const saveScenesRef = useRef(saveScenes)
+  useEffect(() => { isDirtyRef.current = isDirty }, [isDirty])
+  useEffect(() => { saveScenesRef.current = saveScenes }, [saveScenes])
+
+  // Load project data — only once per projectId
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [projRes, scenesRes] = await Promise.all([
-          fetch(`/api/projects`),
-          fetch(`/api/projects/${projectId}/scenes`),
-        ])
-        const projects = await projRes.json()
-        const scenesData = await scenesRes.json()
+    loadProject(projectId)
+
+    // Fetch project title separately
+    fetch('/api/projects')
+      .then(r => r.json())
+      .then(projects => {
         const proj = projects.find(p => p.id === projectId)
         if (proj) setProjectTitle(proj.title)
-        if (scenesData.length > 0) {
-          setScenes(scenesData)
-          if (!activeSceneId) setActiveScene(scenesData[0].id)
-        } else {
-          // Add first scene
-          addScene()
-        }
-      } catch {
-        addScene()
-      }
-    }
-    load()
-  }, [projectId])
+      })
+      .catch(() => {})
+  }, [projectId, loadProject])
 
-  // Save
+  // Save function
   const handleSave = useCallback(async () => {
     setSaving(true)
-    try {
-      await fetch(`/api/projects/${projectId}/scenes`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenes }),
-      })
-      markClean()
-    } catch (err) {
-      console.error('Save failed:', err)
-    }
+    await saveScenes()
     setSaving(false)
-  }, [scenes, projectId, markClean])
+  }, [saveScenes])
 
-  // Autosave
+  // Autosave — 3 second debounce
   useEffect(() => {
     if (!isDirty) return
-    const timer = setTimeout(handleSave, 5000)
+    const timer = setTimeout(() => {
+      saveScenes()
+    }, 3000)
     return () => clearTimeout(timer)
-  }, [isDirty, handleSave])
+  }, [isDirty, scenes]) // re-trigger on scenes change too
+
+  // Save on unmount / page leave
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (isDirtyRef.current) {
+        // Synchronous save via sendBeacon
+        const state = useSceneStore.getState()
+        const body = JSON.stringify({ scenes: state.scenes })
+        navigator.sendBeacon(
+          `/api/projects/${projectId}/scenes`,
+          new Blob([body], { type: 'application/json' })
+        )
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      // Save on component unmount (navigate away)
+      if (isDirtyRef.current) {
+        saveScenesRef.current()
+      }
+    }
+  }, [projectId])
 
   // Keyboard shortcut
   useEffect(() => {
@@ -83,6 +101,27 @@ export default function SceneEditor() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [handleSave])
+
+  // Image upload handler
+  const handleImageUpload = async (file, field) => {
+    if (!file || !activeScene) return
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/upload/images', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+      if (data.url) {
+        updateScene(activeScene.id, { [field]: data.url })
+      }
+    } catch (err) {
+      console.error('Upload failed:', err)
+    }
+    setUploading(false)
+  }
 
   const activeScene = scenes.find(s => s.id === activeSceneId)
 
@@ -120,9 +159,7 @@ export default function SceneEditor() {
           </button>
           <button
             onClick={async () => {
-              // Save first
               await handleSave()
-              // Publish
               try {
                 await fetch(`/api/projects/${projectId}`, {
                   method: 'PUT',
@@ -193,15 +230,126 @@ export default function SceneEditor() {
                           className="w-full max-w-sm"
                         />
                       </div>
+
+                      {/* Background Image — URL or Upload */}
                       <div>
-                        <label className="block font-mono text-xs text-text-muted mb-1">Background Image URL</label>
-                        <input
-                          value={activeScene.background || ''}
-                          onChange={e => updateScene(activeScene.id, { background: e.target.value || null })}
-                          placeholder="Paste image URL or upload"
-                          className="w-full max-w-sm"
-                        />
+                        <label className="block font-mono text-xs text-text-muted mb-1">Background Image</label>
+                        <div className="flex items-center gap-2 max-w-lg">
+                          <input
+                            value={activeScene.background || ''}
+                            onChange={e => updateScene(activeScene.id, { background: e.target.value || null })}
+                            placeholder="Paste URL or upload file →"
+                            className="flex-1"
+                          />
+                          <label className="font-mono text-xs px-3 py-2.5 border border-border hover:border-border-hover text-text-muted hover:text-text transition-all cursor-pointer shrink-0">
+                            {uploading ? '...' : '↑ Upload'}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => {
+                                const file = e.target.files?.[0]
+                                if (file) handleImageUpload(file, 'background')
+                                e.target.value = ''
+                              }}
+                            />
+                          </label>
+                        </div>
+                        {activeScene.background && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <img
+                              src={activeScene.background}
+                              alt="bg preview"
+                              className="h-12 w-20 object-cover border border-border"
+                              onError={e => { e.target.style.display = 'none' }}
+                            />
+                            <button
+                              onClick={() => updateScene(activeScene.id, { background: null })}
+                              className="font-mono text-xs text-text-dim hover:text-error transition-colors"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
                       </div>
+
+                      {/* Character Image Upload */}
+                      <div>
+                        <label className="block font-mono text-xs text-text-muted mb-1">Add Character Image</label>
+                        <div className="flex items-center gap-2 max-w-lg">
+                          <input
+                            id="char-name-input"
+                            placeholder="Character name"
+                            className="w-32"
+                          />
+                          <label className="font-mono text-xs px-3 py-2.5 border border-border hover:border-border-hover text-text-muted hover:text-text transition-all cursor-pointer shrink-0">
+                            {uploading ? '...' : '↑ Upload Character'}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={async e => {
+                                const file = e.target.files?.[0]
+                                const nameInput = document.getElementById('char-name-input')
+                                const charName = nameInput?.value || 'Character'
+                                if (!file) return
+                                setUploading(true)
+                                try {
+                                  const formData = new FormData()
+                                  formData.append('file', file)
+                                  const res = await fetch('/api/upload/images', { method: 'POST', body: formData })
+                                  const data = await res.json()
+                                  if (data.url) {
+                                    const chars = [...(activeScene.characters || [])]
+                                    chars.push({ name: charName, imageUrl: data.url, x: 50 })
+                                    updateScene(activeScene.id, { characters: chars })
+                                  }
+                                } catch (err) {
+                                  console.error('Character upload failed:', err)
+                                }
+                                setUploading(false)
+                                e.target.value = ''
+                              }}
+                            />
+                          </label>
+                        </div>
+                        {/* Show existing characters */}
+                        {activeScene.characters?.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {activeScene.characters.map((char, i) => (
+                              <div key={i} className="flex items-center gap-2 font-mono text-xs text-text-muted">
+                                {char.imageUrl && (
+                                  <img src={char.imageUrl} alt={char.name} className="h-8 w-6 object-cover border border-border" />
+                                )}
+                                <span>{char.name}</span>
+                                <span className="text-text-dim">x:{char.x}%</span>
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={100}
+                                  value={char.x || 50}
+                                  onChange={e => {
+                                    const chars = [...activeScene.characters]
+                                    chars[i] = { ...chars[i], x: parseInt(e.target.value) }
+                                    updateScene(activeScene.id, { characters: chars })
+                                  }}
+                                  className="w-20 accent-white"
+                                />
+                                <button
+                                  onClick={() => {
+                                    const chars = activeScene.characters.filter((_, idx) => idx !== i)
+                                    updateScene(activeScene.id, { characters: chars })
+                                  }}
+                                  className="text-text-dim hover:text-error transition-colors"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
                       <div>
                         <label className="block font-mono text-xs text-text-muted mb-1">Transition</label>
                         <select

@@ -3,7 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'https://your-project.supabase.co')
+// Validate: URL must start with https:// and key must look like a JWT (has dots)
+const isValidUrl = supabaseUrl && supabaseUrl.startsWith('https://') && !supabaseUrl.includes('your-project')
+const isValidKey = supabaseAnonKey && supabaseAnonKey.includes('.') && supabaseAnonKey !== 'your-anon-key-here'
+
+export const supabase = (isValidUrl && isValidKey)
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null
 
@@ -36,4 +40,12 @@ export const getSession = async () => {
   if (!supabase) return null
   const { data } = await supabase.auth.getSession()
   return data.session
+}
+
+// Debug helper — log connection status on import
+if (import.meta.env.DEV) {
+  console.log(
+    `[Supabase] ${isSupabaseConfigured() ? '✓ Connected' : '✗ Not configured — using local mode'}`,
+    isValidUrl ? `URL: ${supabaseUrl}` : 'URL: invalid',
+  )
 }

@@ -9,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 
 // Ensure upload directories exist
-const dirs = ['uploads/audio-drafts', 'uploads/audio-complete', 'uploads/assets', 'data']
+const dirs = ['uploads/audio-drafts', 'uploads/audio-complete', 'uploads/assets', 'uploads/images', 'data']
 dirs.forEach(d => {
   const full = join(ROOT, d)
   if (!existsSync(full)) mkdirSync(full, { recursive: true })
