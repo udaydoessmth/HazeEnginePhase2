@@ -11,11 +11,10 @@ export default function ChannelSelector({ activeChannel }) {
         <button
           key={key}
           onClick={() => setActiveChannel(key)}
-          className={`font-mono text-xs px-3 py-1.5 border transition-all ${
-            activeChannel === key
+          className={`font-mono text-xs px-3 py-1.5 border transition-all ${activeChannel === key
               ? 'border-text text-text bg-bg-elevated'
               : 'border-border text-text-muted hover:border-border-hover hover:text-text'
-          }`}
+            }`}
         >
           {info.label}
         </button>
