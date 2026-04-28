@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import audioEngine from '../../audio/AudioEngine'
 
 export default function GamePreview({ scenes, onClose }) {
@@ -8,41 +8,67 @@ export default function GamePreview({ scenes, onClose }) {
   const [isTyping, setIsTyping] = useState(false)
   const [showChoices, setShowChoices] = useState(false)
   const [transitioning, setTransitioning] = useState(false)
+  const audioInitialized = useRef(false)
 
   const currentScene = scenes.find(s => s.id === currentSceneId)
   const currentDialogue = currentScene?.dialogues?.[dialogueIndex]
 
-  // Play scene audio
+  // ── Audio playback ──────────────────────────────────────────
   useEffect(() => {
     let active = true
 
     const playSceneAudio = async () => {
+      // Always stop any current playback first
       audioEngine.stopPlayback()
-      
+
       if (!currentScene?.audioId) return
 
       try {
         const res = await fetch(`/api/audio-tracks/${currentScene.audioId}`)
-        if (!res.ok) return
+        if (!res.ok || !active) return
+
         const track = await res.json()
-        
         if (!active) return
 
-        await audioEngine.init()
+        // The saved track structure from dawStore.getTrackData() uses:
+        //   track.patterns  — the full pattern grid object
+        //   track.instruments — channel → instrument mapping
+        //   track.tempo
+        // Guard against both field names in case of schema variations
+        const patterns = track.patterns ?? track.patternData
+        if (!patterns || Object.keys(patterns).length === 0) {
+          console.warn('[GamePreview] Track has no pattern data', track)
+          return
+        }
 
+        // Initialize audio engine once (requires a prior user gesture —
+        // the click that opened the preview satisfies this)
+        if (!audioInitialized.current) {
+          await audioEngine.init()
+          audioInitialized.current = true
+        }
+
+        if (!active) return
+
+        // Load instruments for each channel
         if (track.instruments) {
           Object.entries(track.instruments).forEach(([ch, inst]) => {
             audioEngine.changeInstrument(ch, inst)
           })
         }
 
+        // Small delay so the instrument change settles before playback
+        await new Promise(r => setTimeout(r, 80))
+        if (!active) return
+
         audioEngine.startPlayback(
-          track.patternData,
-          track.tempo || 120,
-          true // loop
+          patterns,
+          track.tempo ?? 120,
+          true, // loop
+          () => { } // step callback not needed in preview
         )
       } catch (err) {
-        console.error('Audio load failed:', err)
+        console.error('[GamePreview] Audio load failed:', err)
       }
     }
 
@@ -54,20 +80,19 @@ export default function GamePreview({ scenes, onClose }) {
     }
   }, [currentScene?.audioId])
 
-  // Stop audio when preview closes completely
+  // Stop audio on unmount
   useEffect(() => {
-    return () => audioEngine.stopPlayback()
+    return () => {
+      audioEngine.stopPlayback()
+    }
   }, [])
 
-  // Typewriter effect
+  // ── Typewriter ──────────────────────────────────────────────
   useEffect(() => {
     if (!currentDialogue?.text) {
       setDisplayedText('')
       setIsTyping(false)
-      // If no dialogues, show choices immediately
-      if (currentScene?.choices?.length > 0) {
-        setShowChoices(true)
-      }
+      if (currentScene?.choices?.length > 0) setShowChoices(true)
       return
     }
 
@@ -88,34 +113,31 @@ export default function GamePreview({ scenes, onClose }) {
     return () => clearInterval(timer)
   }, [currentDialogue?.text, currentSceneId, dialogueIndex])
 
+  // ── Navigation ──────────────────────────────────────────────
   const advance = useCallback(() => {
     if (!currentScene) return
 
-    // If still typing, show full text
     if (isTyping) {
       setIsTyping(false)
       setDisplayedText(currentDialogue?.text || '')
       return
     }
 
-    // Next dialogue
     if (dialogueIndex < (currentScene.dialogues?.length || 0) - 1) {
       setDialogueIndex(prev => prev + 1)
       return
     }
 
-    // Show choices if any
     if (currentScene.choices?.length > 0) {
       setShowChoices(true)
       return
     }
 
-    // Go to next scene in order
     const currentIndex = scenes.findIndex(s => s.id === currentSceneId)
     if (currentIndex < scenes.length - 1) {
       goToScene(scenes[currentIndex + 1].id)
     }
-  }, [isTyping, dialogueIndex, currentScene, currentSceneId, scenes])
+  }, [isTyping, dialogueIndex, currentScene, currentSceneId, scenes, currentDialogue])
 
   const goToScene = (sceneId) => {
     setTransitioning(true)
@@ -128,79 +150,138 @@ export default function GamePreview({ scenes, onClose }) {
   }
 
   const handleChoice = (choice) => {
-    if (choice.targetSceneId) {
-      goToScene(choice.targetSceneId)
-    }
+    if (choice.targetSceneId) goToScene(choice.targetSceneId)
   }
 
-  // Click to advance
   const handleClick = () => {
     if (!showChoices) advance()
   }
 
-  // Keyboard
   useEffect(() => {
     const handler = (e) => {
       if (e.key === 'Escape') onClose()
-      if (e.key === ' ' || e.key === 'Enter') {
+      if ((e.key === ' ' || e.key === 'Enter') && !showChoices) {
         e.preventDefault()
-        if (!showChoices) advance()
+        advance()
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [advance, showChoices, onClose])
 
+  // ── Empty state ─────────────────────────────────────────────
   if (!currentScene) {
     return (
-      <div className="h-screen bg-black flex items-center justify-center" onClick={onClose}>
-        <p className="font-mono text-sm text-text-secondary">No scenes to preview</p>
+      <div
+        onClick={onClose}
+        style={{
+          height: '100vh',
+          background: '#000',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+        }}
+      >
+        <p style={{ fontFamily: 'monospace', fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>
+          No scenes to preview
+        </p>
       </div>
     )
   }
 
-  const isEnd = !showChoices &&
+  const isEnd =
+    !showChoices &&
     dialogueIndex >= (currentScene.dialogues?.length || 0) - 1 &&
-    currentScene.choices?.length === 0 &&
+    (currentScene.choices?.length ?? 0) === 0 &&
     scenes.findIndex(s => s.id === currentSceneId) >= scenes.length - 1
 
+  // ── Render ──────────────────────────────────────────────────
   return (
     <div
-      className="h-screen bg-black flex items-center justify-center cursor-pointer select-none"
       onClick={handleClick}
+      style={{
+        height: '100vh',
+        background: '#000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        userSelect: 'none',
+        position: 'relative',
+      }}
     >
       {/* Close button */}
       <button
         onClick={(e) => { e.stopPropagation(); onClose() }}
-        className="absolute top-4 right-4 z-50 font-mono text-xs text-text-muted hover:text-text px-3 py-1.5 bg-black/60 border border-border hover:border-border-hover transition-all"
+        style={{
+          position: 'absolute',
+          top: '16px',
+          right: '16px',
+          zIndex: 50,
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          letterSpacing: '0.1em',
+          color: 'rgba(255,255,255,0.45)',
+          background: 'rgba(0,0,0,0.6)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          padding: '6px 14px',
+          cursor: 'pointer',
+          transition: 'all 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)' }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)' }}
       >
         ✕ Close
       </button>
 
       {/* Game viewport */}
       <div
-        className={`relative w-full max-w-4xl aspect-video overflow-hidden transition-opacity duration-400 ${
-          transitioning ? 'opacity-0' : 'opacity-100'
-        }`}
         style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: '896px',
+          aspectRatio: '16/9',
+          overflow: 'hidden',
           backgroundColor: '#0a0a0a',
           backgroundImage: currentScene.background ? `url(${currentScene.background})` : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
+          opacity: transitioning ? 0 : 1,
+          transition: 'opacity 0.4s ease',
         }}
       >
         {/* Characters */}
         {currentScene.characters?.map((char, i) => (
           <div
             key={i}
-            className="absolute bottom-16"
-            style={{ left: `${char.x || 50}%`, transform: 'translateX(-50%)' }}
+            style={{
+              position: 'absolute',
+              bottom: '64px',
+              left: `${char.x || 50}%`,
+              transform: 'translateX(-50%)',
+            }}
           >
             {char.imageUrl ? (
-              <img src={char.imageUrl} alt={char.name} className="h-64 object-contain" />
+              <img
+                src={char.imageUrl}
+                alt={char.name}
+                style={{ height: '256px', objectFit: 'contain' }}
+              />
             ) : (
-              <div className="w-20 h-40 bg-bg-elevated/80 border border-border flex items-end justify-center pb-3">
-                <span className="font-mono text-xs text-text-dim">{char.name?.[0] || '?'}</span>
+              <div style={{
+                width: '80px',
+                height: '160px',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                display: 'flex',
+                alignItems: 'flex-end',
+                justifyContent: 'center',
+                paddingBottom: '12px',
+              }}>
+                <span style={{ fontFamily: 'monospace', fontSize: '11px', color: 'rgba(255,255,255,0.3)' }}>
+                  {char.name?.[0] || '?'}
+                </span>
               </div>
             )}
           </div>
@@ -208,19 +289,49 @@ export default function GamePreview({ scenes, onClose }) {
 
         {/* Dialogue box */}
         {currentDialogue && !showChoices && (
-          <div className="absolute bottom-0 left-0 right-0 bg-black/85 backdrop-blur-sm border-t border-border px-8 py-6">
+          <div style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: 'rgba(0,0,0,0.88)',
+            backdropFilter: 'blur(8px)',
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            padding: '24px 32px',
+          }}>
             {currentDialogue.characterName && (
-              <p className="font-mono text-xs text-text-secondary mb-2 tracking-wider uppercase">
+              <p style={{
+                fontFamily: 'monospace',
+                fontSize: '10px',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.5)',
+                marginBottom: '10px',
+              }}>
                 {currentDialogue.characterName}
               </p>
             )}
-            <p className="font-mono text-sm text-text leading-relaxed min-h-[3em]">
+            <p style={{
+              fontFamily: 'monospace',
+              fontSize: '13px',
+              color: '#fff',
+              lineHeight: 1.7,
+              minHeight: '3em',
+              margin: 0,
+            }}>
               {displayedText}
-              {isTyping && <span className="animate-pulse">▌</span>}
+              {isTyping && (
+                <span style={{ animation: 'blink 0.8s step-end infinite' }}>▌</span>
+              )}
             </p>
             {!isTyping && (
-              <div className="mt-3 text-right">
-                <span className="font-mono text-xs text-text-dim animate-pulse">▸</span>
+              <div style={{ marginTop: '12px', textAlign: 'right' }}>
+                <span style={{
+                  fontFamily: 'monospace',
+                  fontSize: '11px',
+                  color: 'rgba(255,255,255,0.3)',
+                  animation: 'blink 1s step-end infinite',
+                }}>▸</span>
               </div>
             )}
           </div>
@@ -228,18 +339,30 @@ export default function GamePreview({ scenes, onClose }) {
 
         {/* Choices */}
         {showChoices && (
-          <div className="absolute bottom-0 left-0 right-0 bg-black/85 backdrop-blur-sm border-t border-border p-8">
-            <div className="space-y-2 max-w-lg mx-auto">
+          <div style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: 'rgba(0,0,0,0.88)',
+            backdropFilter: 'blur(8px)',
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            padding: '24px 32px',
+          }}>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              maxWidth: '480px',
+              margin: '0 auto',
+            }}>
               {currentScene.choices.map((choice, i) => (
-                <button
+                <ChoiceBtn
                   key={choice.id}
+                  index={i}
+                  text={choice.text || 'Untitled choice'}
                   onClick={(e) => { e.stopPropagation(); handleChoice(choice) }}
-                  className="w-full text-left font-mono text-sm px-4 py-3 border border-border hover:border-border-hover hover:bg-bg-hover transition-all animate-fade-in-up"
-                  style={{ animationDelay: `${i * 100}ms` }}
-                >
-                  <span className="text-text-dim mr-2">{i + 1}.</span>
-                  {choice.text || 'Untitled choice'}
-                </button>
+                />
               ))}
             </div>
           </div>
@@ -247,17 +370,82 @@ export default function GamePreview({ scenes, onClose }) {
 
         {/* End screen */}
         {isEnd && !isTyping && (
-          <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center animate-fade-in">
-            <p className="font-mono text-sm text-text-secondary mb-6">End of story</p>
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(0,0,0,0.92)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '24px',
+            animation: 'fadeIn 0.5s ease',
+          }}>
+            <p style={{
+              fontFamily: 'monospace',
+              fontSize: '11px',
+              letterSpacing: '0.2em',
+              textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.35)',
+            }}>
+              End of story
+            </p>
             <button
               onClick={(e) => { e.stopPropagation(); onClose() }}
-              className="font-mono text-xs px-6 py-2.5 border border-border hover:border-border-hover transition-colors"
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '11px',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+                padding: '12px 28px',
+                background: '#fff',
+                color: '#0a0a0a',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: '700',
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
             >
               Return to editor
             </button>
           </div>
         )}
       </div>
+
+      <style>{`
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+      `}</style>
     </div>
+  )
+}
+
+function ChoiceBtn({ index, text, onClick }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        width: '100%',
+        textAlign: 'left',
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        padding: '12px 16px',
+        background: hov ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.03)',
+        border: `1px solid ${hov ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)'}`,
+        color: hov ? '#fff' : 'rgba(255,255,255,0.7)',
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        letterSpacing: '0.03em',
+        lineHeight: 1.5,
+      }}
+    >
+      <span style={{ color: 'rgba(255,255,255,0.3)', marginRight: '10px' }}>{index + 1}.</span>
+      {text}
+    </button>
   )
 }

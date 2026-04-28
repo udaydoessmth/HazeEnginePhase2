@@ -1,16 +1,55 @@
+import { useState } from 'react'
 import { useSceneStore } from '../../stores/sceneStore'
 
 export default function SceneList() {
-  const { scenes, activeSceneId, addScene, removeScene, setActiveScene, reorderScenes } = useSceneStore()
+  const { scenes, activeSceneId, addScene, removeScene, setActiveScene } = useSceneStore()
 
   return (
-    <div className="w-52 bg-bg-card shrink-0 flex flex-col overflow-hidden">
+    <div style={{
+      width: '200px',
+      flexShrink: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      background: 'rgba(255,255,255,0.015)',
+      borderRight: '1px solid rgba(255,255,255,0.06)',
+    }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-3 border-b border-border">
-        <span className="font-mono text-xs text-text-secondary">Scenes</span>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 16px',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        flexShrink: 0,
+      }}>
+        <span style={{
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          color: 'rgba(255,255,255,0.3)',
+        }}>Scenes</span>
         <button
           onClick={addScene}
-          className="font-mono text-xs text-text-muted hover:text-text px-2 py-0.5 border border-border hover:border-border-hover transition-all"
+          style={{
+            fontFamily: 'monospace',
+            fontSize: '14px',
+            lineHeight: 1,
+            background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.12)',
+            color: 'rgba(255,255,255,0.4)',
+            width: '22px',
+            height: '22px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+            padding: 0,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.35)' }}
+          onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)' }}
           title="Add Scene"
         >
           +
@@ -18,40 +57,105 @@ export default function SceneList() {
       </div>
 
       {/* Scene Items */}
-      <div className="flex-1 overflow-y-auto">
+      <div style={{ flex: 1, overflowY: 'auto' }}>
         {scenes.map((scene, index) => (
-          <div
+          <SceneRow
             key={scene.id}
-            onClick={() => setActiveScene(scene.id)}
-            className={`flex items-center justify-between px-3 py-2.5 cursor-pointer border-b border-border/50 group transition-colors ${
-              activeSceneId === scene.id
-                ? 'bg-bg-elevated text-text'
-                : 'text-text-secondary hover:bg-bg-hover'
-            }`}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="font-mono text-xs text-text-dim shrink-0">{String(index + 1).padStart(2, '0')}</span>
-              <span className="font-mono text-xs truncate">{scene.title}</span>
-            </div>
-            {scenes.length > 1 && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  removeScene(scene.id)
-                }}
-                className="font-mono text-xs text-text-dim hover:text-error opacity-0 group-hover:opacity-100 transition-all ml-1"
-              >
-                ×
-              </button>
-            )}
-          </div>
+            scene={scene}
+            index={index}
+            isActive={activeSceneId === scene.id}
+            canRemove={scenes.length > 1}
+            onSelect={() => setActiveScene(scene.id)}
+            onRemove={() => removeScene(scene.id)}
+          />
         ))}
       </div>
 
-      {/* Scene Count */}
-      <div className="px-3 py-2 border-t border-border">
-        <span className="font-mono text-xs text-text-dim">{scenes.length} scene{scenes.length !== 1 ? 's' : ''}</span>
+      {/* Footer count */}
+      <div style={{
+        padding: '10px 16px',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+        flexShrink: 0,
+      }}>
+        <span style={{
+          fontFamily: 'monospace',
+          fontSize: '10px',
+          letterSpacing: '0.1em',
+          color: 'rgba(255,255,255,0.2)',
+        }}>
+          {scenes.length} scene{scenes.length !== 1 ? 's' : ''}
+        </span>
       </div>
+    </div>
+  )
+}
+
+function SceneRow({ scene, index, isActive, canRemove, onSelect, onRemove }) {
+  const [hov, setHov] = useState(false)
+
+  return (
+    <div
+      onClick={onSelect}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '10px 16px',
+        cursor: 'pointer',
+        borderBottom: '1px solid rgba(255,255,255,0.04)',
+        background: isActive
+          ? 'rgba(255,255,255,0.07)'
+          : hov ? 'rgba(255,255,255,0.03)' : 'transparent',
+        borderLeft: isActive ? '2px solid rgba(255,255,255,0.6)' : '2px solid transparent',
+        transition: 'all 0.12s',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+        <span style={{
+          fontFamily: 'monospace',
+          fontSize: '9px',
+          color: 'rgba(255,255,255,0.2)',
+          flexShrink: 0,
+          letterSpacing: '0.05em',
+        }}>
+          {String(index + 1).padStart(2, '0')}
+        </span>
+        <span style={{
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          color: isActive ? '#fff' : 'rgba(255,255,255,0.5)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          transition: 'color 0.12s',
+          letterSpacing: '0.03em',
+        }}>
+          {scene.title}
+        </span>
+      </div>
+      {canRemove && hov && (
+        <button
+          onClick={e => { e.stopPropagation(); onRemove() }}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'rgba(255,100,100,0.7)',
+            fontFamily: 'monospace',
+            fontSize: '14px',
+            lineHeight: 1,
+            cursor: 'pointer',
+            padding: '0 2px',
+            flexShrink: 0,
+            transition: 'color 0.12s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = '#ff4444'}
+          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,100,100,0.7)'}
+        >
+          ×
+        </button>
+      )}
     </div>
   )
 }

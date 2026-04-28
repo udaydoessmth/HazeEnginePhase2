@@ -9,6 +9,13 @@ import GamePreview from '../components/GameEngine/GamePreview'
 import AudioTrackPicker from '../components/GameEngine/AudioTrackPicker'
 import audioEngine from '../audio/AudioEngine'
 
+const TABS = [
+  { id: 'dialogue', label: 'Dialogue' },
+  { id: 'choices', label: 'Choices' },
+  { id: 'settings', label: 'Settings' },
+  { id: 'audio', label: 'Audio' },
+]
+
 export default function SceneEditor() {
   const { projectId } = useParams()
   const navigate = useNavigate()
@@ -106,212 +113,224 @@ export default function SceneEditor() {
     return <GamePreview scenes={scenes} onClose={stopPreview} />
   }
 
-  const TABS = [
-    { id: 'dialogue', label: 'Dialogue' },
-    { id: 'choices', label: 'Choices' },
-    { id: 'settings', label: 'Settings' },
-    { id: 'audio', label: 'Audio' },
-  ]
-
   return (
-    <div className="h-screen bg-bg flex flex-col overflow-hidden">
-
-      {/* ── TOP BAR ─────────────────────────────────────────── */}
-      <header
-        className="shrink-0 border-b border-border bg-bg/95 backdrop-blur-sm"
-        style={{ height: '52px' }}
-      >
-        <div className="h-full flex items-center justify-between px-5 gap-4">
-
-          {/* Left: back + title */}
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="font-mono text-xs text-text-muted hover:text-text transition-colors shrink-0 flex items-center gap-1"
-            >
-              ← Back
-            </button>
-            <span className="text-border/60 select-none">|</span>
-            <span
-              className="font-mono text-xs text-text-secondary truncate"
-              title={projectTitle}
-            >
-              {projectTitle}
+    <div style={{
+      height: '100vh',
+      background: '#0a0a0a',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      fontFamily: 'monospace',
+    }}>
+      {/* ── Top Bar ── */}
+      <div style={{
+        height: '52px',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 24px',
+        flexShrink: 0,
+        background: 'rgba(255,255,255,0.02)',
+        zIndex: 10,
+      }}>
+        {/* Left */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: 0 }}>
+          <TopBarBtn onClick={() => navigate('/dashboard')}>← Back</TopBarBtn>
+          <div style={{ width: '1px', height: '16px', background: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
+          <span style={{
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            color: 'rgba(255,255,255,0.45)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            letterSpacing: '0.05em',
+          }}>
+            {projectTitle}
+          </span>
+          {isDirty && (
+            <span style={{
+              fontFamily: 'monospace',
+              fontSize: '10px',
+              color: 'rgba(255,255,255,0.2)',
+              letterSpacing: '0.1em',
+              flexShrink: 0,
+            }}>
+              unsaved
             </span>
-            {isDirty && (
-              <span className="font-mono text-[10px] text-text-dim shrink-0 opacity-60">
-                unsaved
-              </span>
-            )}
-          </div>
-
-          {/* Right: actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* DAW */}
-            <Link
-              to={`/project/${projectId}/daw`}
-              className="font-mono text-xs text-text-muted hover:text-text px-3 py-1.5 rounded border border-border/60 hover:border-border transition-all"
-            >
-              ♪ DAW
-            </Link>
-
-            {/* Preview */}
-            <button
-              onClick={async () => { await audioEngine.init(); startPreview() }}
-              className="font-mono text-xs text-text-muted hover:text-text px-3 py-1.5 rounded border border-border/60 hover:border-border transition-all"
-            >
-              ▶ Preview
-            </button>
-
-            {/* Publish */}
-            <button
-              onClick={async () => {
-                await handleSave()
-                try {
-                  await fetch(`/api/projects/${projectId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ isPublished: true, publishedAt: new Date().toISOString() }),
-                  })
-                  const url = `${window.location.origin}/play/${projectId}`
-                  await navigator.clipboard.writeText(url)
-                  alert(`Published! Link copied:\n${url}`)
-                } catch (err) {
-                  console.error('Publish failed:', err)
-                }
-              }}
-              className="font-mono text-xs text-text-muted hover:text-text px-3 py-1.5 rounded border border-border/60 hover:border-border transition-all"
-            >
-              ↑ Publish
-            </button>
-
-            {/* Save — primary */}
-            <button
-              onClick={handleSave}
-              disabled={saving || !isDirty}
-              className="font-mono text-xs px-4 py-1.5 rounded bg-text text-bg hover:opacity-90 transition-opacity disabled:opacity-25"
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
+          )}
         </div>
-      </header>
 
-      {/* ── MAIN LAYOUT ─────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+        {/* Right */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          <NavLink to={`/project/${projectId}/daw`}>♪ DAW</NavLink>
 
+          <ActionBtn
+            onClick={async () => { await audioEngine.init(); startPreview() }}
+          >
+            ▶ Preview
+          </ActionBtn>
+
+          <ActionBtn
+            onClick={async () => {
+              await handleSave()
+              try {
+                await fetch(`/api/projects/${projectId}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ isPublished: true, publishedAt: new Date().toISOString() }),
+                })
+                const url = `${window.location.origin}/play/${projectId}`
+                await navigator.clipboard.writeText(url)
+                alert(`Published! Link copied:\n${url}`)
+              } catch (err) {
+                console.error('Publish failed:', err)
+              }
+            }}
+          >
+            ↑ Publish
+          </ActionBtn>
+
+          <ActionBtn
+            onClick={handleSave}
+            disabled={saving || !isDirty}
+            primary={isDirty}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </ActionBtn>
+        </div>
+      </div>
+
+      {/* ── Main Layout ── */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Sidebar */}
         <SceneList projectId={projectId} />
 
         {/* Center */}
-        <div className="flex-1 flex flex-col border-l border-r border-border overflow-hidden">
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          borderLeft: '1px solid rgba(255,255,255,0.06)',
+          borderRight: '1px solid rgba(255,255,255,0.06)',
+          overflow: 'hidden',
+        }}>
           {activeScene ? (
             <>
-              {/* Canvas — takes all remaining vertical space above the panel */}
-              <div className="flex-1 overflow-hidden">
+              {/* Canvas */}
+              <div style={{ flex: 1, overflow: 'hidden' }}>
                 <SceneCanvas scene={activeScene} />
               </div>
 
-              {/* ── BOTTOM PANEL ────────────────────────────── */}
-              <div
-                className="shrink-0 border-t border-border flex flex-col"
-                style={{ height: '280px' }}
-              >
+              {/* ── Bottom Panel ── */}
+              <div style={{
+                height: '280px',
+                flexShrink: 0,
+                borderTop: '1px solid rgba(255,255,255,0.08)',
+                display: 'flex',
+                flexDirection: 'column',
+              }}>
                 {/* Tab bar */}
-                <div className="flex items-center shrink-0 border-b border-border bg-bg" style={{ gap: 0 }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                  borderBottom: '1px solid rgba(255,255,255,0.06)',
+                  background: 'rgba(255,255,255,0.015)',
+                }}>
                   {TABS.map(t => (
-                    <button
+                    <TabBtn
                       key={t.id}
+                      label={t.label}
+                      active={tab === t.id}
                       onClick={() => setTab(t.id)}
-                      className="font-mono text-xs tracking-wide transition-colors relative"
-                      style={{
-                        padding: '11px 20px',
-                        color: tab === t.id ? 'var(--color-text)' : 'var(--color-text-muted)',
-                        background: tab === t.id ? 'var(--color-bg-card)' : 'transparent',
-                        borderRight: '1px solid var(--color-border)',
-                        borderBottom: tab === t.id ? '2px solid var(--color-text)' : '2px solid transparent',
-                      }}
-                    >
-                      {t.label}
-                    </button>
+                    />
                   ))}
                 </div>
 
                 {/* Tab content */}
-                <div className="flex-1 overflow-y-auto p-5">
+                <div style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '20px 24px',
+                }}>
                   {tab === 'dialogue' && <DialogueEditor scene={activeScene} />}
                   {tab === 'choices' && <ChoiceEditor scene={activeScene} scenes={scenes} />}
 
                   {tab === 'settings' && (
-                    <div className="flex flex-col gap-5 max-w-2xl">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '560px' }}>
 
                       {/* Scene title */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="font-mono text-xs text-text-muted">Scene Title</label>
+                      <Field label="Scene Title">
                         <input
                           value={activeScene.title}
                           onChange={e => updateScene(activeScene.id, { title: e.target.value })}
-                          className="w-full max-w-xs"
+                          style={{ ...fieldInputStyle, maxWidth: '280px' }}
+                          onFocus={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'}
+                          onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}
                         />
-                      </div>
+                      </Field>
 
                       {/* Background image */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="font-mono text-xs text-text-muted">Background Image</label>
-                        <div className="flex items-center gap-2">
+                      <Field label="Background Image">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <input
                             value={activeScene.background || ''}
                             onChange={e => updateScene(activeScene.id, { background: e.target.value || null })}
                             placeholder="Paste image URL…"
-                            className="flex-1 max-w-sm"
+                            style={{ ...fieldInputStyle, flex: 1, maxWidth: '320px' }}
+                            onFocus={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'}
+                            onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}
                           />
-                          <label className="font-mono text-xs px-3 py-2 border border-border/60 hover:border-border text-text-muted hover:text-text transition-all cursor-pointer shrink-0 rounded">
-                            {uploading ? '…' : '↑ Upload'}
+                          <UploadBtn uploading={uploading} label="↑ Upload">
                             <input
                               type="file"
                               accept="image/*"
-                              className="hidden"
+                              style={{ display: 'none' }}
                               onChange={e => {
                                 const file = e.target.files?.[0]
                                 if (file) handleImageUpload(file, 'background')
                                 e.target.value = ''
                               }}
                             />
-                          </label>
+                          </UploadBtn>
                         </div>
                         {activeScene.background && (
-                          <div className="flex items-center gap-3 mt-1">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
                             <img
                               src={activeScene.background}
                               alt="bg preview"
-                              className="h-10 w-16 object-cover border border-border rounded"
+                              style={{ height: '40px', width: '64px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)' }}
                               onError={e => { e.target.style.display = 'none' }}
                             />
                             <button
                               onClick={() => updateScene(activeScene.id, { background: null })}
-                              className="font-mono text-xs text-text-dim hover:text-red-400 transition-colors"
+                              style={removeBtnStyle}
+                              onMouseEnter={e => e.currentTarget.style.color = '#ff4444'}
+                              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
                             >
                               Remove
                             </button>
                           </div>
                         )}
-                      </div>
+                      </Field>
 
-                      {/* Character image */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="font-mono text-xs text-text-muted">Add Character</label>
-                        <div className="flex items-center gap-2">
+                      {/* Character */}
+                      <Field label="Add Character">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <input
                             id="char-name-input"
                             placeholder="Character name"
-                            className="w-36"
+                            style={{ ...fieldInputStyle, width: '140px' }}
+                            onFocus={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'}
+                            onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}
                           />
-                          <label className="font-mono text-xs px-3 py-2 border border-border/60 hover:border-border text-text-muted hover:text-text transition-all cursor-pointer shrink-0 rounded">
-                            {uploading ? '…' : '↑ Upload Character'}
+                          <UploadBtn uploading={uploading} label="↑ Upload Character">
                             <input
                               type="file"
                               accept="image/*"
-                              className="hidden"
+                              style={{ display: 'none' }}
                               onChange={async e => {
                                 const file = e.target.files?.[0]
                                 const nameInput = document.getElementById('char-name-input')
@@ -335,18 +354,39 @@ export default function SceneEditor() {
                                 e.target.value = ''
                               }}
                             />
-                          </label>
+                          </UploadBtn>
                         </div>
 
                         {activeScene.characters?.length > 0 && (
-                          <div className="flex flex-col gap-2 mt-2">
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
                             {activeScene.characters.map((char, i) => (
-                              <div key={i} className="flex items-center gap-3 font-mono text-xs text-text-muted">
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 {char.imageUrl && (
-                                  <img src={char.imageUrl} alt={char.name} className="h-8 w-6 object-cover border border-border rounded" />
+                                  <img
+                                    src={char.imageUrl}
+                                    alt={char.name}
+                                    style={{ height: '32px', width: '24px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)' }}
+                                  />
                                 )}
-                                <span className="w-24 truncate">{char.name}</span>
-                                <span className="text-text-dim w-10">x:{char.x}%</span>
+                                <span style={{
+                                  fontFamily: 'monospace',
+                                  fontSize: '11px',
+                                  color: 'rgba(255,255,255,0.5)',
+                                  width: '80px',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}>
+                                  {char.name}
+                                </span>
+                                <span style={{
+                                  fontFamily: 'monospace',
+                                  fontSize: '10px',
+                                  color: 'rgba(255,255,255,0.25)',
+                                  width: '36px',
+                                }}>
+                                  x:{char.x}%
+                                </span>
                                 <input
                                   type="range"
                                   min={0} max={100}
@@ -356,14 +396,16 @@ export default function SceneEditor() {
                                     chars[i] = { ...chars[i], x: parseInt(e.target.value) }
                                     updateScene(activeScene.id, { characters: chars })
                                   }}
-                                  className="w-24 accent-white"
+                                  style={{ width: '80px', accentColor: '#fff', cursor: 'pointer' }}
                                 />
                                 <button
                                   onClick={() => {
                                     const chars = activeScene.characters.filter((_, idx) => idx !== i)
                                     updateScene(activeScene.id, { characters: chars })
                                   }}
-                                  className="text-text-dim hover:text-red-400 transition-colors ml-1"
+                                  style={removeBtnStyle}
+                                  onMouseEnter={e => e.currentTarget.style.color = '#ff4444'}
+                                  onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
                                 >
                                   ×
                                 </button>
@@ -371,50 +413,83 @@ export default function SceneEditor() {
                             ))}
                           </div>
                         )}
-                      </div>
+                      </Field>
 
                       {/* Transition */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="font-mono text-xs text-text-muted">Transition</label>
+                      <Field label="Transition">
                         <select
                           value={activeScene.transition}
                           onChange={e => updateScene(activeScene.id, { transition: e.target.value })}
-                          className="max-w-xs"
+                          style={{
+                            ...fieldInputStyle,
+                            maxWidth: '200px',
+                            cursor: 'pointer',
+                            appearance: 'none',
+                            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.25)'/%3E%3C/svg%3E")`,
+                            backgroundRepeat: 'no-repeat',
+                            backgroundPosition: 'right 10px center',
+                            paddingRight: '28px',
+                          }}
+                          onFocus={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'}
+                          onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'}
                         >
                           <option value="fade">Fade</option>
                           <option value="slide-left">Slide Left</option>
                           <option value="slide-right">Slide Right</option>
                           <option value="cut">Cut</option>
                         </select>
-                      </div>
+                      </Field>
                     </div>
                   )}
 
                   {tab === 'audio' && (
-                    <div className="flex flex-col gap-4 max-w-md">
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-col gap-1">
-                          <span className="font-mono text-xs text-text-muted">Scene Audio</span>
-                          <span className="font-mono text-xs text-text-dim">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '400px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <span style={{
+                            fontFamily: 'monospace',
+                            fontSize: '10px',
+                            letterSpacing: '0.15em',
+                            textTransform: 'uppercase',
+                            color: 'rgba(255,255,255,0.3)',
+                            display: 'block',
+                            marginBottom: '4px',
+                          }}>
+                            Scene Audio
+                          </span>
+                          <span style={{
+                            fontFamily: 'monospace',
+                            fontSize: '11px',
+                            color: activeScene.audioId ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.25)',
+                            letterSpacing: '0.03em',
+                          }}>
                             {activeScene.audioId ? 'Track attached' : 'No audio attached'}
                           </span>
                         </div>
-                        <button
-                          onClick={() => setShowAudioPicker(true)}
-                          className="font-mono text-xs px-4 py-2 border border-border/60 hover:border-border text-text-muted hover:text-text transition-all rounded"
-                        >
+                        <ActionBtn onClick={() => setShowAudioPicker(true)}>
                           {activeScene.audioId ? 'Change Track' : 'Attach Track'}
-                        </button>
+                        </ActionBtn>
                       </div>
+
                       {activeScene.audioId && (
                         <button
                           onClick={() => updateScene(activeScene.id, { audioId: null })}
-                          className="font-mono text-xs text-text-dim hover:text-red-400 transition-colors w-fit"
+                          style={removeBtnStyle}
+                          onMouseEnter={e => e.currentTarget.style.color = '#ff4444'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
                         >
                           Remove audio
                         </button>
                       )}
-                      <p className="font-mono text-xs text-text-dim leading-relaxed">
+
+                      <p style={{
+                        fontFamily: 'monospace',
+                        fontSize: '10px',
+                        color: 'rgba(255,255,255,0.2)',
+                        letterSpacing: '0.05em',
+                        lineHeight: 1.7,
+                        margin: 0,
+                      }}>
                         Tip: Compose a track in the DAW first, then attach it here.
                       </p>
                     </div>
@@ -423,8 +498,20 @@ export default function SceneEditor() {
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="font-mono text-xs text-text-muted">Select or create a scene to get started</p>
+            <div style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <p style={{
+                fontFamily: 'monospace',
+                fontSize: '11px',
+                color: 'rgba(255,255,255,0.2)',
+                letterSpacing: '0.1em',
+              }}>
+                Select or create a scene to get started
+              </p>
             </div>
           )}
         </div>
@@ -436,12 +523,189 @@ export default function SceneEditor() {
           sceneId={activeScene?.id}
           currentTrackId={activeScene?.audioId}
           onSelect={(trackId) => {
+            // FIX: update the scene with the selected trackId
             if (activeScene) updateScene(activeScene.id, { audioId: trackId })
-            setShowAudioPicker(false)
           }}
           onClose={() => setShowAudioPicker(false)}
         />
       )}
     </div>
   )
+}
+
+/* ── Shared primitives ── */
+
+function TopBarBtn({ onClick, children }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        letterSpacing: '0.1em',
+        background: 'transparent',
+        border: 'none',
+        color: hov ? '#fff' : 'rgba(255,255,255,0.4)',
+        cursor: 'pointer',
+        padding: '4px 0',
+        transition: 'color 0.15s',
+        flexShrink: 0,
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function NavLink({ to, children }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <a
+      href={to}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        letterSpacing: '0.1em',
+        color: hov ? '#fff' : 'rgba(255,255,255,0.4)',
+        textDecoration: 'none',
+        padding: '6px 14px',
+        border: `1px solid ${hov ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)'}`,
+        transition: 'all 0.15s',
+      }}
+    >
+      {children}
+    </a>
+  )
+}
+
+function ActionBtn({ onClick, disabled, children, primary }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        letterSpacing: '0.1em',
+        padding: '6px 16px',
+        background: primary ? '#ffffff' : 'transparent',
+        color: primary ? '#0a0a0a' : hov && !disabled ? '#fff' : 'rgba(255,255,255,0.4)',
+        border: `1px solid ${primary ? '#fff' : 'rgba(255,255,255,0.12)'}`,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.3 : 1,
+        fontWeight: primary ? '700' : '400',
+        transition: 'all 0.15s',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+function TabBtn({ label, active, onClick }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        letterSpacing: '0.15em',
+        textTransform: 'uppercase',
+        padding: '11px 20px',
+        background: active ? 'rgba(255,255,255,0.05)' : 'transparent',
+        color: active ? '#fff' : hov ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)',
+        border: 'none',
+        borderRight: '1px solid rgba(255,255,255,0.06)',
+        borderBottom: active ? '2px solid rgba(255,255,255,0.7)' : '2px solid transparent',
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        flexShrink: 0,
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <label style={{
+        fontFamily: 'monospace',
+        fontSize: '9px',
+        letterSpacing: '0.2em',
+        textTransform: 'uppercase',
+        color: 'rgba(255,255,255,0.3)',
+      }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+function UploadBtn({ uploading, label, children }) {
+  const [hov, setHov] = useState(false)
+  return (
+    <label
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        fontFamily: 'monospace',
+        fontSize: '11px',
+        letterSpacing: '0.1em',
+        padding: '6px 14px',
+        background: 'transparent',
+        border: `1px solid ${hov ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.12)'}`,
+        color: hov ? '#fff' : 'rgba(255,255,255,0.4)',
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        flexShrink: 0,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {uploading ? '…' : label}
+      {children}
+    </label>
+  )
+}
+
+const fieldInputStyle = {
+  fontFamily: 'monospace',
+  fontSize: '12px',
+  background: 'rgba(255,255,255,0.03)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  color: '#fff',
+  padding: '8px 10px',
+  outline: 'none',
+  transition: 'border-color 0.15s',
+  boxSizing: 'border-box',
+  letterSpacing: '0.03em',
+  width: '100%',
+}
+
+const removeBtnStyle = {
+  fontFamily: 'monospace',
+  fontSize: '11px',
+  letterSpacing: '0.05em',
+  background: 'transparent',
+  border: 'none',
+  color: 'rgba(255,255,255,0.25)',
+  cursor: 'pointer',
+  padding: 0,
+  transition: 'color 0.15s',
+  textAlign: 'left',
 }
