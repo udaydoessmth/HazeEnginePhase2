@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import audioEngine from '../../audio/AudioEngine'
 
 export default function GamePreview({ scenes, onClose }) {
   const [currentSceneId, setCurrentSceneId] = useState(scenes[0]?.id)
@@ -10,6 +11,53 @@ export default function GamePreview({ scenes, onClose }) {
 
   const currentScene = scenes.find(s => s.id === currentSceneId)
   const currentDialogue = currentScene?.dialogues?.[dialogueIndex]
+
+  // Play scene audio
+  useEffect(() => {
+    let active = true
+
+    const playSceneAudio = async () => {
+      audioEngine.stopPlayback()
+      
+      if (!currentScene?.audioId) return
+
+      try {
+        const res = await fetch(`/api/audio-tracks/${currentScene.audioId}`)
+        if (!res.ok) return
+        const track = await res.json()
+        
+        if (!active) return
+
+        await audioEngine.init()
+
+        if (track.instruments) {
+          Object.entries(track.instruments).forEach(([ch, inst]) => {
+            audioEngine.changeInstrument(ch, inst)
+          })
+        }
+
+        audioEngine.startPlayback(
+          track.patternData,
+          track.tempo || 120,
+          true // loop
+        )
+      } catch (err) {
+        console.error('Audio load failed:', err)
+      }
+    }
+
+    playSceneAudio()
+
+    return () => {
+      active = false
+      audioEngine.stopPlayback()
+    }
+  }, [currentScene?.audioId])
+
+  // Stop audio when preview closes completely
+  useEffect(() => {
+    return () => audioEngine.stopPlayback()
+  }, [])
 
   // Typewriter effect
   useEffect(() => {

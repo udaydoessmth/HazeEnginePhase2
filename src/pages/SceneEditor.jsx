@@ -7,6 +7,7 @@ import DialogueEditor from '../components/GameEngine/DialogueEditor'
 import ChoiceEditor from '../components/GameEngine/ChoiceEditor'
 import GamePreview from '../components/GameEngine/GamePreview'
 import AudioTrackPicker from '../components/GameEngine/AudioTrackPicker'
+import audioEngine from '../audio/AudioEngine'
 
 export default function SceneEditor() {
   const { projectId } = useParams()
@@ -152,7 +153,10 @@ export default function SceneEditor() {
             ♪ DAW
           </Link>
           <button
-            onClick={() => startPreview()}
+            onClick={async () => {
+              await audioEngine.init()
+              startPreview()
+            }}
             className="font-mono text-xs text-text-muted hover:text-text px-3 py-1.5 border border-border hover:border-border-hover transition-all"
           >
             ▶ Preview
@@ -371,19 +375,19 @@ export default function SceneEditor() {
                         <div>
                           <label className="block font-mono text-xs text-text-muted mb-1">Scene Audio</label>
                           <p className="font-mono text-xs text-text-dim">
-                            {activeScene.audioTrackId ? 'Audio track attached' : 'No audio attached'}
+                            {activeScene.audioId ? 'Audio track attached' : 'No audio attached'}
                           </p>
                         </div>
                         <button
                           onClick={() => setShowAudioPicker(true)}
                           className="font-mono text-xs px-4 py-2 border border-border hover:border-border-hover text-text-muted hover:text-text transition-all"
                         >
-                          {activeScene.audioTrackId ? 'Change Track' : 'Attach Track'}
+                          {activeScene.audioId ? 'Change Track' : 'Attach Track'}
                         </button>
                       </div>
-                      {activeScene.audioTrackId && (
+                      {activeScene.audioId && (
                         <button
-                          onClick={() => updateScene(activeScene.id, { audioTrackId: null })}
+                          onClick={() => updateScene(activeScene.id, { audioId: null })}
                           className="font-mono text-xs text-text-dim hover:text-error transition-colors"
                         >
                           Remove audio
@@ -409,9 +413,11 @@ export default function SceneEditor() {
       {showAudioPicker && (
         <AudioTrackPicker
           sceneId={activeScene?.id}
-          currentTrackId={activeScene?.audioTrackId}
+          currentTrackId={activeScene?.audioId}
           onSelect={(trackId) => {
-            if (activeScene) updateScene(activeScene.id, { audioTrackId: trackId })
+            console.log("Selected track:", trackId);
+            console.log("Active scene:", activeScene?.id);
+            if (activeScene) updateScene(activeScene.id, { audioId: trackId })
             setShowAudioPicker(false)
           }}
           onClose={() => setShowAudioPicker(false)}

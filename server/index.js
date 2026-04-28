@@ -87,8 +87,10 @@ app.get('/api/projects', (_req, res) => {
 
 app.post('/api/projects', (req, res) => {
   const data = loadData()
+  const { id, ...restBody } = req.body
   const project = {
-    id: crypto.randomUUID(),
+    ...restBody,
+    id: id || crypto.randomUUID(),
     title: req.body.title || 'Untitled Project',
     description: req.body.description || '',
     userId: req.body.userId || 'local',
@@ -148,9 +150,10 @@ app.get('/api/audio-tracks/:id', (req, res) => {
 app.post('/api/audio-tracks', (req, res) => {
   const data = loadData()
   if (!data.audioTracks) data.audioTracks = []
+  const { id, ...restBody } = req.body
   const track = {
-    id: crypto.randomUUID(),
-    ...req.body,
+    ...restBody,
+    id: id || crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }

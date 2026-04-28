@@ -12,7 +12,7 @@ const defaultScene = (orderIndex = 0) => ({
   characters: [],
   choices: [],
   transition: 'fade',
-  audioTrackId: null,
+  audioId: null,
   variables: [],
 })
 
