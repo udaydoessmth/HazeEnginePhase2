@@ -1,11 +1,62 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useDawStore } from '../stores/dawStore'
+import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import audioEngine from '../audio/AudioEngine'
 import StepSequencer from '../components/DAW/StepSequencer'
 import ChannelSelector from '../components/DAW/ChannelSelector'
 import TransportBar from '../components/DAW/TransportBar'
 import InstrumentPanel from '../components/DAW/InstrumentPanel'
+
+// Convert Supabase snake_case row → dawStore camelCase format
+function trackFromSupabase(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    projectId: row.project_id,
+    tempo: row.tempo,
+    scale: row.scale,
+    rootNote: row.root_note,
+    instruments: row.instruments,
+    patterns: row.patterns,
+    patternData: row.patterns,
+  }
+}
+
+async function supabaseLoadTrack(trackId) {
+  const { data, error } = await supabase.from('audio_tracks').select('*').eq('id', trackId).maybeSingle()
+  if (error || !data) return null
+  return trackFromSupabase(data)
+}
+
+async function supabaseSaveTrack(trackData, projectId) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const row = {
+    title: trackData.title || 'Untitled Track',
+    project_id: projectId || trackData.projectId || null,
+    user_id: user.id,
+    tempo: trackData.tempo || 120,
+    scale: trackData.scale || 'major',
+    root_note: trackData.rootNote || 'C',
+    instruments: trackData.instruments || {},
+    patterns: trackData.patterns || {},
+    updated_at: new Date().toISOString(),
+  }
+
+  if (trackData.id) {
+    const { data, error } = await supabase
+      .from('audio_tracks').update(row).eq('id', trackData.id).select().single()
+    if (error) { console.error('[DAW] Supabase update error:', error.message); return null }
+    return trackFromSupabase(data)
+  } else {
+    const { data, error } = await supabase
+      .from('audio_tracks').insert(row).select().single()
+    if (error) { console.error('[DAW] Supabase insert error:', error.message); return null }
+    return trackFromSupabase(data)
+  }
+}
 
 /* ── MP3 Export ──────────────────────────────────────────── */
 async function exportToMp3(patterns, instruments, tempo) {
@@ -96,8 +147,13 @@ export default function DAWPage() {
     const init = async () => {
       if (trackId) {
         try {
-          const res = await fetch(`/api/audio-tracks/${trackId}`)
-          if (res.ok) { loadTrack(await res.json()); return }
+          if (isSupabaseConfigured()) {
+            const track = await supabaseLoadTrack(trackId)
+            if (track) { loadTrack(track); return }
+          } else {
+            const res = await fetch(`/api/audio-tracks/${trackId}`)
+            if (res.ok) { loadTrack(await res.json()); return }
+          }
         } catch { /* ignore */ }
       }
       setProjectId(projectId)
@@ -148,15 +204,18 @@ export default function DAWPage() {
     setSaving(true)
     try {
       const data = getTrackData()
-      const url = data.id ? `/api/audio-tracks/${data.id}` : '/api/audio-tracks'
-      const method = data.id ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
-      const saved = await res.json()
-      setTrackId(saved.id)
-      markClean()
+      if (isSupabaseConfigured()) {
+        const saved = await supabaseSaveTrack(data, projectId)
+        if (saved) { setTrackId(saved.id); markClean() }
+      } else {
+        const url = data.id ? `/api/audio-tracks/${data.id}` : '/api/audio-tracks'
+        const method = data.id ? 'PUT' : 'POST'
+        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+        if (res.ok) { const saved = await res.json(); setTrackId(saved.id); markClean() }
+      }
     } catch (err) { console.error('Save failed:', err) }
     setSaving(false)
-  }, [getTrackData, markClean, setTrackId])
+  }, [getTrackData, markClean, setTrackId, projectId])
 
   useEffect(() => {
     if (!isDirty) return

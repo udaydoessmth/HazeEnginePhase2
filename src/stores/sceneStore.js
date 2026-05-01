@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { supabase, isSupabaseConfigured } from '../lib/supabase'
 
 const generateId = () => crypto.randomUUID()
 
@@ -30,10 +31,42 @@ const defaultChoice = () => ({
   condition: null,
 })
 
+// ── helpers ──────────────────────────────────────────────────────────
+async function apiFetch(url, options) {
+  try {
+    const res = await fetch(url, options)
+    if (!res.ok) return { ok: false }
+    return { ok: true, data: await res.json() }
+  } catch { return { ok: false } }
+}
+
+async function supabaseLoadScenes(projectId) {
+  const { data, error } = await supabase
+    .from('scenes')
+    .select('data')
+    .eq('project_id', projectId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[sceneStore] Supabase load error:', error.message)
+    return null
+  }
+  return data ? (data.data || []) : []
+}
+
+async function supabaseSaveScenes(projectId, scenes) {
+  const { error } = await supabase
+    .from('scenes')
+    .upsert({ project_id: projectId, data: scenes, updated_at: new Date().toISOString() },
+             { onConflict: 'project_id' })
+  if (error) console.error('[sceneStore] Supabase save error:', error.message)
+  return !error
+}
+
+// ── store ─────────────────────────────────────────────────────────────
 export const useSceneStore = create(
   persist(
     (set, get) => ({
-      // Track which project is loaded to prevent cross-project contamination
       projectId: null,
       scenes: [],
       activeSceneId: null,
@@ -44,18 +77,21 @@ export const useSceneStore = create(
       previewMode: false,
       previewSceneId: null,
 
-      // Load scenes from server — only if not already loaded for this project
+      // Load scenes — checks Supabase, then Express, then localStorage
       loadProject: async (projectId) => {
         const state = get()
-        // If already loaded for this project and we have data, don't reload
-        if (state.projectId === projectId && state.isLoaded && state.scenes.length > 0) {
-          return
+        if (state.projectId === projectId && state.isLoaded && state.scenes.length > 0) return
+
+        let scenesData = null
+
+        if (isSupabaseConfigured()) {
+          scenesData = await supabaseLoadScenes(projectId)
+        } else {
+          const { ok, data } = await apiFetch(`/api/projects/${projectId}/scenes`)
+          if (ok) scenesData = data
         }
 
-        try {
-          const res = await fetch(`/api/projects/${projectId}/scenes`)
-          const scenesData = await res.json()
-
+        if (scenesData !== null) {
           if (scenesData.length > 0) {
             set({
               projectId,
@@ -67,54 +103,39 @@ export const useSceneStore = create(
               isLoaded: true,
             })
           } else {
-            // No scenes on server — create first scene only if we don't have any
-            if (state.scenes.length === 0 || state.projectId !== projectId) {
-              const scene = defaultScene(0)
-              set({
-                projectId,
-                scenes: [scene],
-                activeSceneId: scene.id,
-                isDirty: true,
-                isLoaded: true,
-              })
-            } else {
-              set({ projectId, isLoaded: true })
-            }
-          }
-        } catch (err) {
-          console.error('[SceneStore] Load failed:', err)
-          // If we have no scenes at all, create one
-          if (get().scenes.length === 0) {
+            // No scenes yet — create first one
             const scene = defaultScene(0)
-            set({
-              projectId,
-              scenes: [scene],
-              activeSceneId: scene.id,
-              isDirty: true,
-              isLoaded: true,
-            })
+            set({ projectId, scenes: [scene], activeSceneId: scene.id, isDirty: true, isLoaded: true })
+          }
+        } else {
+          // Network completely unavailable — try persisted local state
+          if (get().scenes.length === 0 || state.projectId !== projectId) {
+            const scene = defaultScene(0)
+            set({ projectId, scenes: [scene], activeSceneId: scene.id, isDirty: true, isLoaded: true })
           } else {
             set({ projectId, isLoaded: true })
           }
         }
       },
 
-      // Save scenes to server
+      // Save scenes
       saveScenes: async () => {
         const { projectId, scenes } = get()
         if (!projectId) return false
-        try {
-          await fetch(`/api/projects/${projectId}/scenes`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ scenes }),
-          })
-          set({ isDirty: false })
-          return true
-        } catch (err) {
-          console.error('[SceneStore] Save failed:', err)
-          return false
+
+        if (isSupabaseConfigured()) {
+          const ok = await supabaseSaveScenes(projectId, scenes)
+          if (ok) set({ isDirty: false })
+          return ok
         }
+
+        const { ok } = await apiFetch(`/api/projects/${projectId}/scenes`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scenes }),
+        })
+        if (ok) set({ isDirty: false })
+        return ok
       },
 
       // Scene CRUD
@@ -123,11 +144,7 @@ export const useSceneStore = create(
       addScene: () => {
         const { scenes } = get()
         const scene = defaultScene(scenes.length)
-        set({
-          scenes: [...scenes, scene],
-          activeSceneId: scene.id,
-          isDirty: true,
-        })
+        set({ scenes: [...scenes, scene], activeSceneId: scene.id, isDirty: true })
         return scene
       },
 
@@ -136,9 +153,7 @@ export const useSceneStore = create(
         const filtered = scenes.filter(s => s.id !== id)
         const cleaned = filtered.map(s => ({
           ...s,
-          choices: s.choices.map(c =>
-            c.targetSceneId === id ? { ...c, targetSceneId: null } : c
-          ),
+          choices: s.choices.map(c => c.targetSceneId === id ? { ...c, targetSceneId: null } : c),
         }))
         set({
           scenes: cleaned,
@@ -150,11 +165,10 @@ export const useSceneStore = create(
       setActiveScene: (id) => set({ activeSceneId: id, selectedElementId: null, selectedElementType: null }),
 
       updateScene: (id, updates) => {
-        const { scenes } = get()
-        set({
-          scenes: scenes.map(s => s.id === id ? { ...s, ...updates } : s),
+        set(s => ({
+          scenes: s.scenes.map(sc => sc.id === id ? { ...sc, ...updates } : sc),
           isDirty: true,
-        })
+        }))
       },
 
       reorderScenes: (fromIndex, toIndex) => {
@@ -162,10 +176,7 @@ export const useSceneStore = create(
         const result = [...scenes]
         const [removed] = result.splice(fromIndex, 1)
         result.splice(toIndex, 0, removed)
-        set({
-          scenes: result.map((s, i) => ({ ...s, orderIndex: i })),
-          isDirty: true,
-        })
+        set({ scenes: result.map((s, i) => ({ ...s, orderIndex: i })), isDirty: true })
       },
 
       getActiveScene: () => {
@@ -176,91 +187,67 @@ export const useSceneStore = create(
       // Dialogue CRUD
       addDialogue: (sceneId) => {
         const dialogue = defaultDialogue()
-        const { scenes } = get()
-        set({
-          scenes: scenes.map(s =>
-            s.id === sceneId
-              ? { ...s, dialogues: [...s.dialogues, dialogue] }
-              : s
+        set(s => ({
+          scenes: s.scenes.map(sc =>
+            sc.id === sceneId ? { ...sc, dialogues: [...sc.dialogues, dialogue] } : sc
           ),
           selectedElementId: dialogue.id,
           selectedElementType: 'dialogue',
           isDirty: true,
-        })
+        }))
         return dialogue
       },
 
       updateDialogue: (sceneId, dialogueId, updates) => {
-        const { scenes } = get()
-        set({
-          scenes: scenes.map(s =>
-            s.id === sceneId
-              ? {
-                  ...s,
-                  dialogues: s.dialogues.map(d =>
-                    d.id === dialogueId ? { ...d, ...updates } : d
-                  ),
-                }
-              : s
+        set(s => ({
+          scenes: s.scenes.map(sc =>
+            sc.id === sceneId
+              ? { ...sc, dialogues: sc.dialogues.map(d => d.id === dialogueId ? { ...d, ...updates } : d) }
+              : sc
           ),
           isDirty: true,
-        })
+        }))
       },
 
       removeDialogue: (sceneId, dialogueId) => {
-        const { scenes } = get()
-        set({
-          scenes: scenes.map(s =>
-            s.id === sceneId
-              ? { ...s, dialogues: s.dialogues.filter(d => d.id !== dialogueId) }
-              : s
+        set(s => ({
+          scenes: s.scenes.map(sc =>
+            sc.id === sceneId ? { ...sc, dialogues: sc.dialogues.filter(d => d.id !== dialogueId) } : sc
           ),
           isDirty: true,
-        })
+        }))
       },
 
       // Choice CRUD
       addChoice: (sceneId) => {
         const choice = defaultChoice()
-        const { scenes } = get()
-        set({
-          scenes: scenes.map(s =>
-            s.id === sceneId
-              ? { ...s, choices: [...s.choices, choice] }
-              : s
+        set(s => ({
+          scenes: s.scenes.map(sc =>
+            sc.id === sceneId ? { ...sc, choices: [...sc.choices, choice] } : sc
           ),
           isDirty: true,
-        })
+        }))
         return choice
       },
 
       updateChoice: (sceneId, choiceId, updates) => {
-        const { scenes } = get()
-        set({
-          scenes: scenes.map(s =>
-            s.id === sceneId
-              ? {
-                  ...s,
-                  choices: s.choices.map(c =>
-                    c.id === choiceId ? { ...c, ...updates } : c
-                  ),
-                }
-              : s
+        set(s => ({
+          scenes: s.scenes.map(sc =>
+            sc.id === sceneId
+              ? { ...sc, choices: sc.choices.map(c => c.id === choiceId ? { ...c, ...updates } : c) }
+              : sc
           ),
           isDirty: true,
-        })
+        }))
       },
 
       removeChoice: (sceneId, choiceId) => {
-        const { scenes } = get()
-        set({
-          scenes: scenes.map(s =>
-            s.id === sceneId
-              ? { ...s, choices: s.choices.filter(c => c.id !== choiceId) }
-              : s
+        set(s => ({
+          scenes: s.scenes.map(sc =>
+            sc.id === sceneId ? { ...sc, choices: sc.choices.filter(c => c.id !== choiceId) } : sc
           ),
           isDirty: true,
-        })
+        }))
       },
 
       selectElement: (id, type) => set({ selectedElementId: id, selectedElementType: type }),
@@ -272,7 +259,6 @@ export const useSceneStore = create(
 
       markClean: () => set({ isDirty: false }),
 
-      // Reset for a new project
       resetForProject: (projectId) => set({
         projectId,
         scenes: [],
@@ -283,7 +269,6 @@ export const useSceneStore = create(
     }),
     {
       name: 'haze-scene-store',
-      // Only persist essential data, not UI state
       partialize: (state) => ({
         projectId: state.projectId,
         scenes: state.scenes,

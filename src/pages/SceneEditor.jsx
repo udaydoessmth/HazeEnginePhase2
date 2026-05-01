@@ -45,13 +45,21 @@ export default function SceneEditor() {
 
   useEffect(() => {
     loadProject(projectId)
+    // Try backend first, fall back to localStorage
     fetch('/api/projects')
       .then(r => r.json())
       .then(projects => {
         const proj = projects.find(p => p.id === projectId)
         if (proj) setProjectTitle(proj.title)
       })
-      .catch(() => { })
+      .catch(() => {
+        // Backend offline — read from localStorage
+        try {
+          const local = JSON.parse(localStorage.getItem('haze_projects') || '[]')
+          const proj = local.find(p => p.id === projectId)
+          if (proj) setProjectTitle(proj.title)
+        } catch { }
+      })
   }, [projectId, loadProject])
 
   const handleSave = useCallback(async () => {
@@ -96,13 +104,31 @@ export default function SceneEditor() {
     if (!file || !activeScene) return
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await fetch('/api/upload/images', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (data.url) updateScene(activeScene.id, { [field]: data.url })
+      // Try Express server first (when running npm run dev:all)
+      let url = null
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        const res = await fetch('/api/upload/images', { method: 'POST', body: formData })
+        if (res.ok) {
+          const data = await res.json()
+          url = data.url
+        }
+      } catch { /* server not running — fall through to base64 */ }
+
+      // Fallback: convert to base64 data URL (works without backend)
+      if (!url) {
+        url = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = e => resolve(e.target.result)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+      }
+
+      if (url) updateScene(activeScene.id, { [field]: url })
     } catch (err) {
-      console.error('Upload failed:', err)
+      console.error('Image load failed:', err)
     }
     setUploading(false)
   }
@@ -338,17 +364,30 @@ export default function SceneEditor() {
                                 if (!file) return
                                 setUploading(true)
                                 try {
-                                  const formData = new FormData()
-                                  formData.append('file', file)
-                                  const res = await fetch('/api/upload/images', { method: 'POST', body: formData })
-                                  const data = await res.json()
-                                  if (data.url) {
+                                  let url = null
+                                  try {
+                                    const formData = new FormData()
+                                    formData.append('file', file)
+                                    const res = await fetch('/api/upload/images', { method: 'POST', body: formData })
+                                    if (res.ok) { const data = await res.json(); url = data.url }
+                                  } catch { /* server offline */ }
+
+                                  if (!url) {
+                                    url = await new Promise((resolve, reject) => {
+                                      const reader = new FileReader()
+                                      reader.onload = ev => resolve(ev.target.result)
+                                      reader.onerror = reject
+                                      reader.readAsDataURL(file)
+                                    })
+                                  }
+
+                                  if (url) {
                                     const chars = [...(activeScene.characters || [])]
-                                    chars.push({ name: charName, imageUrl: data.url, x: 50 })
+                                    chars.push({ name: charName, imageUrl: url, x: 50 })
                                     updateScene(activeScene.id, { characters: chars })
                                   }
                                 } catch (err) {
-                                  console.error('Character upload failed:', err)
+                                  console.error('Character image failed:', err)
                                 }
                                 setUploading(false)
                                 e.target.value = ''

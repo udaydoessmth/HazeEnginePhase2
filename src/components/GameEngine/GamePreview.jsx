@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import audioEngine from '../../audio/AudioEngine'
+import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 
 export default function GamePreview({ scenes, onClose }) {
   const [currentSceneId, setCurrentSceneId] = useState(scenes[0]?.id)
@@ -18,31 +19,44 @@ export default function GamePreview({ scenes, onClose }) {
     let active = true
 
     const playSceneAudio = async () => {
-      // Always stop any current playback first
       audioEngine.stopPlayback()
-
       if (!currentScene?.audioId) return
 
       try {
-        const res = await fetch(`/api/audio-tracks/${currentScene.audioId}`)
-        if (!res.ok || !active) return
+        let track = null
 
-        const track = await res.json()
-        if (!active) return
+        // Try Supabase first
+        if (isSupabaseConfigured()) {
+          const { data, error } = await supabase
+            .from('audio_tracks')
+            .select('id, title, tempo, instruments, patterns')
+            .eq('id', currentScene.audioId)
+            .maybeSingle()
+          if (!error && data) {
+            track = {
+              id: data.id,
+              title: data.title,
+              tempo: data.tempo,
+              instruments: data.instruments,
+              patterns: data.patterns,
+            }
+          }
+        }
 
-        // The saved track structure from dawStore.getTrackData() uses:
-        //   track.patterns  — the full pattern grid object
-        //   track.instruments — channel → instrument mapping
-        //   track.tempo
-        // Guard against both field names in case of schema variations
+        // Fallback: Express server
+        if (!track) {
+          const res = await fetch(`/api/audio-tracks/${currentScene.audioId}`)
+          if (res.ok) track = await res.json()
+        }
+
+        if (!track || !active) return
+
         const patterns = track.patterns ?? track.patternData
         if (!patterns || Object.keys(patterns).length === 0) {
           console.warn('[GamePreview] Track has no pattern data', track)
           return
         }
 
-        // Initialize audio engine once (requires a prior user gesture —
-        // the click that opened the preview satisfies this)
         if (!audioInitialized.current) {
           await audioEngine.init()
           audioInitialized.current = true
@@ -50,23 +64,16 @@ export default function GamePreview({ scenes, onClose }) {
 
         if (!active) return
 
-        // Load instruments for each channel
         if (track.instruments) {
           Object.entries(track.instruments).forEach(([ch, inst]) => {
             audioEngine.changeInstrument(ch, inst)
           })
         }
 
-        // Small delay so the instrument change settles before playback
         await new Promise(r => setTimeout(r, 80))
         if (!active) return
 
-        audioEngine.startPlayback(
-          patterns,
-          track.tempo ?? 120,
-          true, // loop
-          () => { } // step callback not needed in preview
-        )
+        audioEngine.startPlayback(patterns, track.tempo ?? 120, true, () => {})
       } catch (err) {
         console.error('[GamePreview] Audio load failed:', err)
       }

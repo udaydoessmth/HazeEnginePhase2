@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 
 export default function AudioTrackPicker({ sceneId, currentTrackId, onSelect, onClose }) {
   const [tracks, setTracks] = useState([])
@@ -7,11 +8,33 @@ export default function AudioTrackPicker({ sceneId, currentTrackId, onSelect, on
   useEffect(() => {
     const load = async () => {
       try {
+        if (isSupabaseConfigured()) {
+          // Load from Supabase
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            const { data, error } = await supabase
+              .from('audio_tracks')
+              .select('id, title, tempo, scale, root_note, project_id, updated_at')
+              .eq('user_id', user.id)
+              .order('updated_at', { ascending: false })
+            if (!error) {
+              setTracks((data || []).map(t => ({
+                id: t.id,
+                title: t.title,
+                tempo: t.tempo,
+                projectId: t.project_id,
+              })))
+              setLoading(false)
+              return
+            }
+          }
+        }
+        // Fallback: Express server
         const res = await fetch('/api/audio-tracks')
-        const data = await res.json()
-        const list = Array.isArray(data) ? data : (data.tracks ?? [])
-        console.log('[AudioTrackPicker] loaded tracks:', list)
-        setTracks(list)
+        if (res.ok) {
+          const data = await res.json()
+          setTracks(Array.isArray(data) ? data : (data.tracks ?? []))
+        }
       } catch (err) {
         console.error('[AudioTrackPicker] failed to load tracks:', err)
         setTracks([])
