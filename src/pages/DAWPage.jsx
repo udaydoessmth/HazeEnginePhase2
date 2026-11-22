@@ -7,6 +7,10 @@ import StepSequencer from '../components/DAW/StepSequencer'
 import ChannelSelector from '../components/DAW/ChannelSelector'
 import TransportBar from '../components/DAW/TransportBar'
 import InstrumentPanel from '../components/DAW/InstrumentPanel'
+import PublishModal from '../components/ui/PublishModal'
+import PublishSuccessBanner from '../components/ui/PublishSuccessBanner'
+import { publishTrack, uploadCoverImage } from '../stores/publishStore'
+import { renderToWav, audioBufferToWav } from '../audio/exporter'
 
 // Convert Supabase snake_case row → dawStore camelCase format
 function trackFromSupabase(row) {
@@ -60,11 +64,7 @@ async function supabaseSaveTrack(trackData, projectId) {
 
 /* ── MP3 Export ──────────────────────────────────────────── */
 async function exportToMp3(patterns, instruments, tempo) {
-  // Render audio offline via AudioEngine helper (returns Float32Array L/R or interleaved)
-  const { exportToWav } = await import('../audio/exporter')
-
-  // We render to WAV buffer then re-encode to MP3 using lamejs
-  const wavBuffer = await exportToWav(patterns, instruments, tempo, { returnBuffer: true })
+  // Render audio offline → AudioBuffer → WAV blob → MP3
 
   // Load lamejs from CDN if not already present
   if (!window.lamejs) {
@@ -80,9 +80,8 @@ async function exportToMp3(patterns, instruments, tempo) {
   const mp3encoder = new window.lamejs.Mp3Encoder(2, 44100, 192)
   const sampleRate = 44100
 
-  // Decode WAV buffer back to PCM
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate })
-  const decoded = await audioCtx.decodeAudioData(wavBuffer)
+  // Render offline via Tone
+  const decoded = await renderToWav(patterns, instruments, tempo)
 
   const leftF32 = decoded.getChannelData(0)
   const rightF32 = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : decoded.getChannelData(0)
@@ -127,11 +126,15 @@ export default function DAWPage() {
   const [audioReady, setAudioReady] = useState(false)
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [showPublish, setShowPublish] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [publishedUrl, setPublishedUrl] = useState(null)
   const patternsRef = useRef(null)
 
   const {
     isPlaying, tempo, currentStep, isLooping, volume, patterns,
     activeChannel, instruments, trackTitle, isDirty, scale, rootNote,
+    trackId: storeTrackId,
     setIsPlaying, setCurrentStep, setTempo, toggleLoop,
     setVolume, initPatterns, loadTrack, getTrackData,
     markClean, setTrackTitle, setTrackId, setProjectId,
@@ -321,6 +324,14 @@ export default function DAWPage() {
             {exporting ? 'Exporting...' : '↓ Export MP3'}
           </ActionBtn>
 
+          <ActionBtn
+            onClick={() => setShowPublish(true)}
+            disabled={!storeTrackId}
+            title={!storeTrackId ? 'Save the track first to enable publishing' : ''}
+          >
+            ↑ Publish
+          </ActionBtn>
+
           <ActionBtn onClick={handleSave} disabled={saving || !isDirty} primary={isDirty}>
             {saving ? 'Saving...' : 'Save'}
           </ActionBtn>
@@ -393,6 +404,66 @@ export default function DAWPage() {
           </div>
         </div>
       )}
+
+      {/* Publish modal */}
+      <PublishModal
+        isOpen={showPublish}
+        onClose={() => setShowPublish(false)}
+        type="music"
+        defaultTitle={trackTitle}
+        publishing={publishing}
+        onPublish={async ({ title, description, genre, visibility, coverFile }) => {
+          setPublishing(true)
+          try {
+            // Save the track first
+            await handleSave()
+            const currentTrackId = useDawStore.getState().trackId
+            if (!currentTrackId) {
+              console.error('[DAWPage] No trackId — save first')
+              setPublishing(false)
+              return
+            }
+            // Export audio to a WAV blob
+            let audioBlob = null
+            try {
+              const buffer = await renderToWav(patterns, instruments, tempo)
+              audioBlob = audioBufferToWav(buffer)
+            } catch (err) {
+              console.error('[DAWPage] Audio render failed:', err)
+            }
+            // Upload cover image
+            const coverImageUrl = coverFile ? await uploadCoverImage(coverFile) : null
+            // Get creator name
+            let creatorName = null
+            try {
+              if (isSupabaseConfigured()) {
+                const { data: { user } } = await supabase.auth.getUser()
+                creatorName = user?.user_metadata?.username || user?.email?.split('@')[0] || null
+              } else {
+                const local = JSON.parse(localStorage.getItem('haze_user') || 'null')
+                creatorName = local?.username || null
+              }
+            } catch { /* ignore */ }
+            // Publish
+            const result = await publishTrack(currentTrackId, { title, description, coverImageUrl, genre, visibility, audioBlob, creatorName })
+            if (result) {
+              const url = `${window.location.origin}/music/${currentTrackId}`
+              setPublishedUrl(url)
+              setShowPublish(false)
+            }
+          } catch (err) {
+            console.error('[DAWPage] Publish failed:', err)
+          }
+          setPublishing(false)
+        }}
+      />
+
+      {/* Publish success banner */}
+      <PublishSuccessBanner
+        url={publishedUrl}
+        type="music"
+        onDismiss={() => setPublishedUrl(null)}
+      />
     </div>
   )
 }

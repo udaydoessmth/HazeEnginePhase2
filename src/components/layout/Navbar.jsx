@@ -51,6 +51,13 @@ export default function Navbar() {
 
         {/* Nav links */}
         <div className="flex items-center gap-8">
+          <Link
+            to="/explore"
+            className="font-mono text-sm text-text-secondary hover:text-text transition-colors"
+          >
+            Explore
+          </Link>
+
           {user ? (
             <>
               <Link
@@ -58,6 +65,12 @@ export default function Navbar() {
                 className="font-mono text-sm text-text-secondary hover:text-text transition-colors"
               >
                 Dashboard
+              </Link>
+              <Link
+                to="/my-publications"
+                className="font-mono text-sm text-text-secondary hover:text-text transition-colors"
+              >
+                Published
               </Link>
               <button
                 onClick={handleLogout}

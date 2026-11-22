@@ -8,6 +8,11 @@ import ChoiceEditor from '../components/GameEngine/ChoiceEditor'
 import GamePreview from '../components/GameEngine/GamePreview'
 import AudioTrackPicker from '../components/GameEngine/AudioTrackPicker'
 import audioEngine from '../audio/AudioEngine'
+import PublishModal from '../components/ui/PublishModal'
+import PublishSuccessBanner from '../components/ui/PublishSuccessBanner'
+import { publishProject, uploadCoverImage } from '../stores/publishStore'
+import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 
 const TABS = [
   { id: 'dialogue', label: 'Dialogue' },
@@ -37,6 +42,9 @@ export default function SceneEditor() {
   const [tab, setTab] = useState('dialogue')
   const [showAudioPicker, setShowAudioPicker] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [showPublish, setShowPublish] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [publishedUrl, setPublishedUrl] = useState(null)
 
   const isDirtyRef = useRef(false)
   const saveScenesRef = useRef(saveScenes)
@@ -199,21 +207,7 @@ export default function SceneEditor() {
           </ActionBtn>
 
           <ActionBtn
-            onClick={async () => {
-              await handleSave()
-              try {
-                await fetch(`/api/projects/${projectId}`, {
-                  method: 'PUT',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ isPublished: true, publishedAt: new Date().toISOString() }),
-                })
-                const url = `${window.location.origin}/play/${projectId}`
-                await navigator.clipboard.writeText(url)
-                alert(`Published! Link copied:\n${url}`)
-              } catch (err) {
-                console.error('Publish failed:', err)
-              }
-            }}
+            onClick={() => setShowPublish(true)}
           >
             ↑ Publish
           </ActionBtn>
@@ -562,12 +556,57 @@ export default function SceneEditor() {
           sceneId={activeScene?.id}
           currentTrackId={activeScene?.audioId}
           onSelect={(trackId) => {
-            // FIX: update the scene with the selected trackId
             if (activeScene) updateScene(activeScene.id, { audioId: trackId })
           }}
           onClose={() => setShowAudioPicker(false)}
         />
       )}
+
+      {/* Publish modal */}
+      <PublishModal
+        isOpen={showPublish}
+        onClose={() => setShowPublish(false)}
+        type="game"
+        defaultTitle={projectTitle}
+        publishing={publishing}
+        onPublish={async ({ title, description, genre, visibility, coverFile }) => {
+          setPublishing(true)
+          try {
+            // Save scenes first
+            await saveScenes()
+            // Upload cover image if provided
+            const coverImageUrl = coverFile ? await uploadCoverImage(coverFile) : null
+            // Get creator name from Supabase user metadata
+            let creatorName = null
+            try {
+              if (isSupabaseConfigured()) {
+                const { data: { user } } = await supabase.auth.getUser()
+                creatorName = user?.user_metadata?.username || user?.email?.split('@')[0] || null
+              } else {
+                const local = JSON.parse(localStorage.getItem('haze_user') || 'null')
+                creatorName = local?.username || null
+              }
+            } catch { /* ignore */ }
+            // Publish the project
+            const result = await publishProject(projectId, { title, description, coverImageUrl, genre, visibility, creatorName })
+            if (result) {
+              const url = `${window.location.origin}/play/${projectId}`
+              setPublishedUrl(url)
+              setShowPublish(false)
+            }
+          } catch (err) {
+            console.error('[SceneEditor] Publish failed:', err)
+          }
+          setPublishing(false)
+        }}
+      />
+
+      {/* Publish success banner */}
+      <PublishSuccessBanner
+        url={publishedUrl}
+        type="game"
+        onDismiss={() => setPublishedUrl(null)}
+      />
     </div>
   )
 }

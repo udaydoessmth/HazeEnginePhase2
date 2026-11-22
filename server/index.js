@@ -192,6 +192,30 @@ app.post('/api/audio-export', (req, res) => {
   res.json({ url: `/uploads/audio-complete/${fname}` })
 })
 
+// ===== PUBLISHING API (local/Express mode fallback) =====
+
+// Get all public published games
+app.get('/api/publish/games', (_req, res) => {
+  const data = loadData()
+  const games = (data.projects || []).filter(p => (p.isPublished || p.is_published) && (p.visibility === 'public' || !p.visibility))
+  res.json(games)
+})
+
+// Get all public published music
+app.get('/api/publish/music', (_req, res) => {
+  const data = loadData()
+  const tracks = (data.audioTracks || []).filter(t => (t.isPublished || t.is_published) && (t.visibility === 'public' || !t.visibility))
+  res.json(tracks)
+})
+
+// Get publish info for a single project
+app.get('/api/projects/:id/publish-info', (req, res) => {
+  const data = loadData()
+  const proj = (data.projects || []).find(p => p.id === req.params.id)
+  if (!proj || (!proj.isPublished && !proj.is_published)) return res.status(404).json({ error: 'Not found or not published' })
+  res.json(proj)
+})
+
 app.listen(PORT, () => {
   console.log(`[HazeEngine Server] Running on http://localhost:${PORT}`)
   console.log(`[HazeEngine Server] Uploads: ${join(ROOT, 'uploads')}`)

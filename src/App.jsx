@@ -9,6 +9,9 @@ import Dashboard from './pages/Dashboard'
 import SceneEditor from './pages/SceneEditor'
 import DAWPage from './pages/DAWPage'
 import PlayGame from './pages/PlayGame'
+import PublicMusicPage from './pages/PublicMusicPage'
+import ExplorePage from './pages/ExplorePage'
+import MyPublicationsPage from './pages/MyPublicationsPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function ProtectedRoute({ children }) {
@@ -28,14 +31,27 @@ export default function App() {
     <ErrorBoundary>
       <div className="min-h-screen bg-bg text-text">
         <Routes>
+          {/* Public routes */}
           <Route path="/" element={<><Navbar /><LandingPage /></>} />
           <Route path="/login" element={<><Navbar /><LoginPage /></>} />
           <Route path="/signup" element={<><Navbar /><SignupPage /></>} />
+
+          {/* Explore — public, no auth required */}
+          <Route path="/explore" element={<ExplorePage />} />
+
+          {/* Public game player */}
+          <Route path="/play/:projectId" element={<PlayGame />} />
+
+          {/* Public music player */}
+          <Route path="/music/:trackId" element={<PublicMusicPage />} />
+
+          {/* Protected routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Navbar /><Dashboard /></ProtectedRoute>} />
+          <Route path="/my-publications" element={<ProtectedRoute><MyPublicationsPage /></ProtectedRoute>} />
           <Route path="/project/:projectId/editor" element={<ProtectedRoute><SceneEditor /></ProtectedRoute>} />
           <Route path="/project/:projectId/daw" element={<ProtectedRoute><DAWPage /></ProtectedRoute>} />
           <Route path="/project/:projectId/daw/:trackId" element={<ProtectedRoute><DAWPage /></ProtectedRoute>} />
-          <Route path="/play/:projectId" element={<PlayGame />} />
+
           <Route path="*" element={<><Navbar /><NotFoundPage /></>} />
         </Routes>
       </div>
