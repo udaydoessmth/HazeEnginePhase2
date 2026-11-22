@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useProjectStore } from '../stores/projectStore'
-import Modal from '../components/ui/Modal'
 
 export default function Dashboard() {
   const navigate = useNavigate()

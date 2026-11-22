@@ -132,13 +132,20 @@ export default function LandingPage() {
                     Start Creating
                   </Link>
                   <Link
-                    to={user ? '/dashboard' : '/login'}
+                    to="/explore"
                     className="font-mono text-sm text-text-muted hover:text-text transition-all tracking-wider"
                     style={{
                       padding: '14px 32px',
                       borderRadius: '16px',
                       border: '1px solid var(--color-border)',
                     }}
+                  >
+                    Explore
+                  </Link>
+                  <Link
+                    to={user ? '/dashboard' : '/login'}
+                    className="font-mono text-sm text-text-dim hover:text-text-muted transition-all tracking-wider"
+                    style={{ padding: '14px 0' }}
                   >
                     {user ? 'Dashboard' : 'Log In'}
                   </Link>
@@ -327,6 +334,15 @@ export default function LandingPage() {
               }}
             >
               Get Started
+            </Link>
+          </AnimatedSection>
+          <AnimatedSection delay={320}>
+            <Link
+              to="/explore"
+              className="font-mono text-sm text-text-dim hover:text-text-muted transition-all tracking-wider"
+              style={{ marginTop: '8px', display: 'inline-block' }}
+            >
+              Browse published creations →
             </Link>
           </AnimatedSection>
         </div>

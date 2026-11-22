@@ -153,7 +153,7 @@ export const useSceneStore = create(
         const filtered = scenes.filter(s => s.id !== id)
         const cleaned = filtered.map(s => ({
           ...s,
-          choices: s.choices.map(c => c.targetSceneId === id ? { ...c, targetSceneId: null } : c),
+          choices: (s.choices || []).map(c => c.targetSceneId === id ? { ...c, targetSceneId: null } : c),
         }))
         set({
           scenes: cleaned,
@@ -189,7 +189,7 @@ export const useSceneStore = create(
         const dialogue = defaultDialogue()
         set(s => ({
           scenes: s.scenes.map(sc =>
-            sc.id === sceneId ? { ...sc, dialogues: [...sc.dialogues, dialogue] } : sc
+            sc.id === sceneId ? { ...sc, dialogues: [...(sc.dialogues || []), dialogue] } : sc
           ),
           selectedElementId: dialogue.id,
           selectedElementType: 'dialogue',
@@ -202,7 +202,7 @@ export const useSceneStore = create(
         set(s => ({
           scenes: s.scenes.map(sc =>
             sc.id === sceneId
-              ? { ...sc, dialogues: sc.dialogues.map(d => d.id === dialogueId ? { ...d, ...updates } : d) }
+              ? { ...sc, dialogues: (sc.dialogues || []).map(d => d.id === dialogueId ? { ...d, ...updates } : d) }
               : sc
           ),
           isDirty: true,
@@ -212,7 +212,7 @@ export const useSceneStore = create(
       removeDialogue: (sceneId, dialogueId) => {
         set(s => ({
           scenes: s.scenes.map(sc =>
-            sc.id === sceneId ? { ...sc, dialogues: sc.dialogues.filter(d => d.id !== dialogueId) } : sc
+            sc.id === sceneId ? { ...sc, dialogues: (sc.dialogues || []).filter(d => d.id !== dialogueId) } : sc
           ),
           isDirty: true,
         }))
@@ -223,7 +223,7 @@ export const useSceneStore = create(
         const choice = defaultChoice()
         set(s => ({
           scenes: s.scenes.map(sc =>
-            sc.id === sceneId ? { ...sc, choices: [...sc.choices, choice] } : sc
+            sc.id === sceneId ? { ...sc, choices: [...(sc.choices || []), choice] } : sc
           ),
           isDirty: true,
         }))
@@ -234,7 +234,7 @@ export const useSceneStore = create(
         set(s => ({
           scenes: s.scenes.map(sc =>
             sc.id === sceneId
-              ? { ...sc, choices: sc.choices.map(c => c.id === choiceId ? { ...c, ...updates } : c) }
+              ? { ...sc, choices: (sc.choices || []).map(c => c.id === choiceId ? { ...c, ...updates } : c) }
               : sc
           ),
           isDirty: true,
@@ -244,7 +244,7 @@ export const useSceneStore = create(
       removeChoice: (sceneId, choiceId) => {
         set(s => ({
           scenes: s.scenes.map(sc =>
-            sc.id === sceneId ? { ...sc, choices: sc.choices.filter(c => c.id !== choiceId) } : sc
+            sc.id === sceneId ? { ...sc, choices: (sc.choices || []).filter(c => c.id !== choiceId) } : sc
           ),
           isDirty: true,
         }))

@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { fetchPublishedTrack } from '../stores/publishStore'
+import { fetchPublishedTrack, fetchCreatorName } from '../stores/publishStore'
 
 export default function PublicMusicPage() {
   const { trackId } = useParams()
   const [track, setTrack] = useState(null)
+  const [creatorName, setCreatorName] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [audioError, setAudioError] = useState(false)
 
   // Audio player state
   const audioRef = useRef(null)
@@ -148,7 +150,7 @@ export default function PublicMusicPage() {
         {!track?.description && <div style={{ height: '24px' }} />}
 
         {/* Audio Player */}
-        {track?.audio_url ? (
+        {track?.audio_url && !audioError ? (
           <div style={{ width: '100%', maxWidth: '400px' }}>
             <audio
               ref={audioRef}
@@ -156,6 +158,7 @@ export default function PublicMusicPage() {
               onTimeUpdate={e => setCurrentTime(e.target.currentTime)}
               onLoadedMetadata={e => setDuration(e.target.duration)}
               onEnded={() => setIsPlaying(false)}
+              onError={() => setAudioError(true)}
             />
 
             {/* Play/Pause + Seek */}
@@ -220,8 +223,8 @@ export default function PublicMusicPage() {
             </div>
           </div>
         ) : (
-          <p style={{ fontFamily: 'monospace', fontSize: '10px', color: 'rgba(255,255,255,0.2)', letterSpacing: '0.1em' }}>
-            No audio available for this track.
+          <p style={{ fontFamily: 'monospace', fontSize: '10px', color: 'rgba(255,255,255,0.2)', letterSpacing: '0.1em', textAlign: 'center' }}>
+            {audioError ? 'Audio failed to load. The creator may need to re-publish.' : 'No audio available for this track.'}
           </p>
         )}
 

@@ -24,6 +24,7 @@ const TABS = [
 export default function SceneEditor() {
   const { projectId } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const scenes = useSceneStore(s => s.scenes)
   const activeSceneId = useSceneStore(s => s.activeSceneId)
@@ -576,17 +577,14 @@ export default function SceneEditor() {
             await saveScenes()
             // Upload cover image if provided
             const coverImageUrl = coverFile ? await uploadCoverImage(coverFile) : null
-            // Get creator name from Supabase user metadata
-            let creatorName = null
-            try {
-              if (isSupabaseConfigured()) {
-                const { data: { user } } = await supabase.auth.getUser()
-                creatorName = user?.user_metadata?.username || user?.email?.split('@')[0] || null
-              } else {
+            // Get creator name from AuthContext or user metadata
+            let creatorName = user?.user_metadata?.username || user?.email?.split('@')[0] || null
+            if (!creatorName) {
+              try {
                 const local = JSON.parse(localStorage.getItem('haze_user') || 'null')
                 creatorName = local?.username || null
-              }
-            } catch { /* ignore */ }
+              } catch { /* ignore */ }
+            }
             // Publish the project
             const result = await publishProject(projectId, { title, description, coverImageUrl, genre, visibility, creatorName })
             if (result) {

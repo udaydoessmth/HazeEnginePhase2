@@ -6,7 +6,7 @@ export default function ChoiceEditor({ scene, scenes }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      {scene.choices.map((choice, index) => (
+      {(scene.choices || []).map((choice, index) => (
         <ChoiceRow
           key={choice.id}
           choice={choice}
@@ -39,7 +39,7 @@ export default function ChoiceEditor({ scene, scenes }) {
         + Add Choice
       </button>
 
-      {scene.choices.length === 0 && (
+      {(!scene.choices || scene.choices.length === 0) && (
         <p style={{
           fontFamily: 'monospace',
           fontSize: '11px',

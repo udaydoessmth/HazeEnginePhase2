@@ -127,7 +127,7 @@ export async function fetchPublicGames(searchQuery = '') {
   if (isSupabaseConfigured()) {
     let q = supabase
       .from('projects')
-      .select('id, title, description, cover_image, genre, visibility, published_at, user_id')
+      .select('id, title, description, cover_image, genre, visibility, published_at, user_id, creator_name')
       .eq('is_published', true)
       .eq('visibility', 'public')
       .order('published_at', { ascending: false })
@@ -296,7 +296,7 @@ export async function fetchPublicMusic(searchQuery = '') {
   if (isSupabaseConfigured()) {
     let q = supabase
       .from('audio_tracks')
-      .select('id, title, description, cover_image, genre, visibility, published_at, user_id, audio_url')
+      .select('id, title, description, cover_image, genre, visibility, published_at, user_id, audio_url, creator_name')
       .eq('is_published', true)
       .eq('visibility', 'public')
       .order('published_at', { ascending: false })

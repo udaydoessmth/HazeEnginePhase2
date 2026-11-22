@@ -134,6 +134,7 @@ export default function MyPublicationsPage() {
                   coverImage={game.cover_image}
                   publishedAt={game.published_at}
                   visibility={game.visibility}
+                  type="game"
                   url={`${window.location.origin}/play/${game.id}`}
                   onOpen={() => window.open(`/play/${game.id}`, '_blank')}
                   onCopy={() => copyLink(`${window.location.origin}/play/${game.id}`)}
@@ -148,6 +149,7 @@ export default function MyPublicationsPage() {
                   coverImage={track.cover_image}
                   publishedAt={track.published_at}
                   visibility={track.visibility}
+                  type="music"
                   url={`${window.location.origin}/music/${track.id}`}
                   onOpen={() => window.open(`/music/${track.id}`, '_blank')}
                   onCopy={() => copyLink(`${window.location.origin}/music/${track.id}`)}
@@ -162,7 +164,7 @@ export default function MyPublicationsPage() {
   )
 }
 
-function PublicationRow({ title, subtitle, coverImage, publishedAt, visibility, url, onOpen, onCopy, onUnpublish }) {
+function PublicationRow({ title, subtitle, coverImage, publishedAt, visibility, type = 'music', url, onOpen, onCopy, onUnpublish }) {
   const [hovered, setHovered] = useState(false)
   const [copied, setCopied] = useState(false)
   const [confirmUnpublish, setConfirmUnpublish] = useState(false)
@@ -201,7 +203,7 @@ function PublicationRow({ title, subtitle, coverImage, publishedAt, visibility, 
         {coverImage ? (
           <img src={coverImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <span style={{ fontSize: '18px', opacity: 0.2 }}>♪</span>
+          <span style={{ fontSize: '18px', opacity: 0.2 }}>{type === 'game' ? '📖' : '♪'}</span>
         )}
       </div>
 

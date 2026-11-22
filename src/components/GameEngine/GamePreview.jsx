@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import audioEngine from '../../audio/AudioEngine'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 
-export default function GamePreview({ scenes, onClose }) {
-  const [currentSceneId, setCurrentSceneId] = useState(scenes[0]?.id)
+export default function GamePreview({ scenes = [], onClose }) {
+  const [currentSceneId, setCurrentSceneId] = useState(scenes?.[0]?.id)
   const [dialogueIndex, setDialogueIndex] = useState(0)
   const [displayedText, setDisplayedText] = useState('')
   const [isTyping, setIsTyping] = useState(false)
@@ -11,7 +11,7 @@ export default function GamePreview({ scenes, onClose }) {
   const [transitioning, setTransitioning] = useState(false)
   const audioInitialized = useRef(false)
 
-  const currentScene = scenes.find(s => s.id === currentSceneId)
+  const currentScene = scenes?.find(s => s.id === currentSceneId)
   const currentDialogue = currentScene?.dialogues?.[dialogueIndex]
 
   // ── Audio playback ──────────────────────────────────────────

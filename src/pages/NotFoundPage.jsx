@@ -9,12 +9,20 @@ export default function NotFoundPage() {
         <p className="font-mono text-xs text-text-muted mb-8">
           The page you&apos;re looking for doesn&apos;t exist.
         </p>
-        <Link
-          to="/"
-          className="font-mono text-xs px-6 py-3 bg-text text-bg hover:bg-text-secondary transition-colors tracking-wider"
-        >
-          Go home
-        </Link>
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+          <Link
+            to="/"
+            className="font-mono text-xs px-6 py-3 bg-text text-bg hover:bg-text-secondary transition-colors tracking-wider"
+          >
+            Go home
+          </Link>
+          <Link
+            to="/explore"
+            className="font-mono text-xs px-6 py-3 border border-border hover:border-border-hover transition-colors tracking-wider"
+          >
+            Explore
+          </Link>
+        </div>
       </div>
     </div>
   )

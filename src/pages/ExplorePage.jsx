@@ -183,6 +183,11 @@ function GameCard({ game, onClick }) {
         <h3 style={{ fontFamily: "'Space Grotesk', 'Inter', system-ui, sans-serif", fontSize: '14px', fontWeight: '600', color: '#fff', margin: '0 0 6px', letterSpacing: '-0.01em', lineHeight: 1.3 }}>
           {game.title}
         </h3>
+        {game.creator_name && (
+          <p style={{ fontFamily: 'monospace', fontSize: '10px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', margin: '0 0 4px' }}>
+            by {game.creator_name}
+          </p>
+        )}
         {game.genre && (
           <p style={{ fontFamily: 'monospace', fontSize: '10px', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 4px' }}>
             {game.genre}
@@ -234,6 +239,11 @@ function MusicCard({ track, onClick }) {
         <h3 style={{ fontFamily: "'Space Grotesk', 'Inter', system-ui, sans-serif", fontSize: '14px', fontWeight: '600', color: '#fff', margin: '0 0 6px', letterSpacing: '-0.01em', lineHeight: 1.3 }}>
           {track.title}
         </h3>
+        {track.creator_name && (
+          <p style={{ fontFamily: 'monospace', fontSize: '10px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', margin: '0 0 4px' }}>
+            by {track.creator_name}
+          </p>
+        )}
         {track.genre && (
           <p style={{ fontFamily: 'monospace', fontSize: '10px', color: 'rgba(255,255,255,0.25)', letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0' }}>
             {track.genre}

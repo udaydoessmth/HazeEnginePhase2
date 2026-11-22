@@ -6,7 +6,7 @@ export default function DialogueEditor({ scene }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      {scene.dialogues.map((dialogue, index) => (
+      {(scene.dialogues || []).map((dialogue, index) => (
         <DialogueRow
           key={dialogue.id}
           dialogue={dialogue}

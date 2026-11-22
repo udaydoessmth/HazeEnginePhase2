@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import GamePreview from '../components/GameEngine/GamePreview'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { fetchPublishedProject, fetchCreatorName } from '../stores/publishStore'
 
 export default function PlayGame() {
   const { projectId } = useParams()
@@ -15,63 +16,43 @@ export default function PlayGame() {
   useEffect(() => {
     const load = async () => {
       try {
+        const proj = await fetchPublishedProject(projectId)
+        if (!proj) {
+          setError('Project not found or not published.')
+          setLoading(false)
+          return
+        }
+        setProject(proj)
+
+        if (proj.creator_name) {
+          setCreatorName(proj.creator_name)
+        } else if (proj.user_id) {
+          const name = await fetchCreatorName(proj.user_id)
+          if (name) setCreatorName(name)
+        }
+
+        // Load scenes
+        let scenesData = []
         if (isSupabaseConfigured()) {
-          // Load project metadata
-          const { data: proj, error: projErr } = await supabase
-            .from('projects')
-            .select('id, title, description, cover_image, is_published, visibility, user_id, creator_name')
-            .eq('id', projectId)
-            .maybeSingle()
-
-          if (projErr || !proj) { setError('Project not found.'); setLoading(false); return }
-          if (!proj.is_published) { setError('This project is not published.'); setLoading(false); return }
-
-          setProject(proj)
-
-          // Use stored creator_name first, then try profiles table
-          if (proj.creator_name) {
-            setCreatorName(proj.creator_name)
-          } else if (proj.user_id) {
-            try {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('username')
-                .eq('id', proj.user_id)
-                .maybeSingle()
-              if (profile?.username) setCreatorName(profile.username)
-            } catch { /* profiles may not exist */ }
-          }
-
-          // Load scenes
           const { data: sceneRow, error: sceneErr } = await supabase
             .from('scenes')
             .select('data')
             .eq('project_id', projectId)
             .maybeSingle()
-
-          if (sceneErr || !sceneRow?.data || sceneRow.data.length === 0) {
-            setError('This project has no scenes yet.')
-          } else {
-            setScenes(sceneRow.data)
+          if (!sceneErr && sceneRow?.data) {
+            scenesData = sceneRow.data
           }
         } else {
-          // Express fallback
-          const [projRes, scenesRes] = await Promise.all([
-            fetch('/api/projects'),
-            fetch(`/api/projects/${projectId}/scenes`),
-          ])
-          const projects = await projRes.json()
-          const scenesData = await scenesRes.json()
-          const proj = projects.find(p => p.id === projectId)
-          if (!proj) { setError('Project not found.'); setLoading(false); return }
-          if (!proj.isPublished && !proj.is_published) { setError('This project is not published.'); setLoading(false); return }
-          setProject({ ...proj, cover_image: proj.cover_image || proj.coverImage || null })
-          if (proj.creator_name) setCreatorName(proj.creator_name)
-          if (scenesData.length === 0) {
-            setError('This project has no scenes yet.')
-          } else {
-            setScenes(scenesData)
-          }
+          try {
+            const res = await fetch(`/api/projects/${projectId}/scenes`)
+            if (res.ok) scenesData = await res.json()
+          } catch { /* ignore */ }
+        }
+
+        if (!scenesData || scenesData.length === 0) {
+          setError('This project has no scenes yet.')
+        } else {
+          setScenes(scenesData)
         }
       } catch {
         setError('Failed to load project.')

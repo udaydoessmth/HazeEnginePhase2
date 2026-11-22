@@ -7,6 +7,16 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/tone')) return 'tone'
+          if (id.includes('node_modules/@supabase')) return 'supabase'
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     watch: {
