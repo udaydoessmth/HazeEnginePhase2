@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HazeEngine — Technical Report & Documentation</title>
+  <style>
+    @page { margin: 20mm; size: A4; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #1e293b;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      background: #ffffff;
+    }
+    .header { text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 24px; margin-bottom: 32px; }
+    .header h1 { font-size: 32px; margin: 0 0 8px; color: #0f172a; letter-spacing: -0.02em; }
+    .header .subtitle { font-size: 16px; color: #64748b; margin: 0 0 12px; }
+    .header .meta { font-family: monospace; font-size: 12px; color: #94a3b8; }
+    h2 { font-size: 20px; color: #0f172a; margin-top: 32px; border-bottom: 1px solid #f1f5f9; padding-bottom: 6px; }
+    h3 { font-size: 16px; color: #334155; margin-top: 20px; }
+    p, li { font-size: 14.5px; color: #334155; }
+    ul { padding-left: 20px; }
+    pre {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 14px 16px;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      color: #0f172a;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13.5px; }
+    th { background: #0f172a; color: #ffffff; text-align: left; padding: 10px 12px; }
+    td { padding: 9px 12px; border-bottom: 1px solid #e2e8f0; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: #e2e8f0; color: #334155; }
+    .btn-print {
+      position: fixed; top: 20px; right: 20px;
+      padding: 10px 18px; background: #0f172a; color: #fff;
+      border: none; border-radius: 6px; font-family: monospace;
+      font-size: 12px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    @media print {
+      .btn-print { display: none; }
+      body { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <button class="btn-print" onclick="window.print()">🖨️ Print / Save as PDF</button>
+
+  <div class="header">
+    <h1>HAZEENGINE</h1>
+    <div class="subtitle">Comprehensive Technical Architecture & Project Development Report</div>
+    <div class="meta">Version 0.2.0 • Phase 2 MVP Publishing Release • Engineering Documentation</div>
+  </div>
+
+  <h2>1. Executive Summary & Project Abstract</h2>
+  <p><strong>HazeEngine</strong> is a zero-install, cloud-integrated web platform combining an <strong>Interactive Visual Novel Studio</strong> with a full-fledged <strong>Digital Audio Workstation (DAW)</strong>. Historically, digital narrative creators were forced to juggle disjointed desktop software—using narrative tools (Ren'Py, Twine) alongside complex commercial audio workstations (FL Studio, Ableton Live). This created severe friction, licensing costs, platform dependency, and distribution bottlenecks.</p>
+  <p>HazeEngine eliminates this divide by embedding both a node-based visual novel studio and a 4-channel synthesizer/step sequencer directly into modern web browsers. Creators write branching storylines, position character sprites, compose original multi-channel soundtracks, bind music directly to scenes, and instantly distribute their work via permanent public URLs (<code>/play/:id</code> and <code>/music/:id</code>) with zero compilation steps.</p>
+
+  <h2>2. High-Level Architecture & Design Philosophy</h2>
+  <h3>2.1 Dual-Tier Topology (Cloud Primary + Local Resilient Fallback)</h3>
+  <p>The system is built on an adaptive multi-tier architecture that operates transparently across both cloud and local environments:</p>
+  <ul>
+    <li><strong>Cloud Mode (Primary - Supabase)</strong>: Leverages Supabase PostgreSQL, GoTrue Auth (JWT session management), Row Level Security (RLS), and S3-compatible cloud storage buckets (<code>images</code> and <code>audio</code>).</li>
+    <li><strong>Local Mode (Offline Fallback - Express Server)</strong>: If internet connectivity drops or Supabase credentials are absent, the application gracefully degrades to an Express.js server on port 3001 with local JSON persistence (<code>data/projects.json</code>) and disk storage (<code>uploads/</code>).</li>
+  </ul>
+
+  <pre>
+[Client Layer: React 19 + Vite 8]
+    ├── Scene Visual Editor (Canvas, Nodes, Dialogue)
+    ├── Web DAW Studio (4-Channel Sequencer, Synthesizers)
+    └── Public Readers (/play/:projectId and /music/:trackId)
+             │
+             ├── (Primary Cloud)    ──► Supabase PostgreSQL + Auth + Storage
+             └── (Offline Fallback) ──► Express.js API (:3001) + JSON Store
+  </pre>
+
+  <h2>3. Detailed Subsystem Architecture</h2>
+  <h3>3.1 Digital Audio Workstation (DAW)</h3>
+  <p>Built upon Tone.js and the Web Audio API, decoupled from React's render thread to prevent audio jitter. Synthesizers include subtractive oscillators, a 2-operator FM synth for bass, a 6-voice polyphonic synth for chords, and synthesized drum instruments (Membrane kick, Noise snare/hat, Metal rimshot). Offline audio rendering computes PCM audio at 44.1 kHz, converted to 16-bit WAV and encoded to MP3 via <code>lamejs</code>.</p>
+
+  <h3>3.2 Visual Novel Game Engine</h3>
+  <p>Visual novel storylines are stored as a directed scene graph. Features real-time character-by-character typewriter streaming (30ms rate), normalized percentage coordinate positioning for sprite scaling across screen sizes, and dynamic target scene linking for interactive choices.</p>
+
+  <h3>3.3 Security & Hardening</h3>
+  <p>Row Level Security restricts database writes to authenticated resource owners while permitting anonymous public reads for published games and music. Express upload endpoints enforce an allowed category whitelist and <code>path.basename()</code> regex sanitization to eliminate path traversal vulnerabilities.</p>
+
+  <h2>4. Complete Development Lifecycle in Phases</h2>
+  <ul>
+    <li><strong>Phase 1: Environment, Tooling & Design System</strong>: Vite 8, React 19, Tailwind v4, design tokens, responsive layout, animated landing page, and Express backend.</li>
+    <li><strong>Phase 2: Visual Novel Core Engine</strong>: <code>SceneEditor.jsx</code> three-pane layout, <code>DialogueEditor.jsx</code>, <code>ChoiceEditor.jsx</code>, and typewriter preview player.</li>
+    <li><strong>Phase 3: Web-Based Digital Audio Workstation</strong>: <code>StepSequencer.jsx</code>, <code>AudioEngine.js</code> multi-synth engine, <code>TransportBar.jsx</code>, scale transpositions, and MP3 exporter.</li>
+    <li><strong>Phase 4: User Authentication & Project Dashboard</strong>: Supabase Auth integration, profile sync triggers, project dashboard grid, and project management workflows.</li>
+    <li><strong>Phase 5: Audio-Visual Integration</strong>: <code>AudioTrackPicker.jsx</code>, scene audio loop bindings, and backward compatibility.</li>
+    <li><strong>Phase 6: MVP Publishing System</strong>: <code>publishStore.js</code> data layer, <code>PublishModal.jsx</code>, public player pages (<code>/play/:id</code> and <code>/music/:id</code>), Explore catalog, and My Publications dashboard.</li>
+    <li><strong>Phase 7: Optimization, Security & Brand Polish</strong>: Rolldown vendor chunk-splitting (&lt;500ms build), path traversal mitigation, vector SVG <code>LogoMark</code>, and data store sanitation.</li>
+  </ul>
+
+  <h2>5. Database Schema & Tables</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Table</th>
+        <th>Primary Key</th>
+        <th>Key Columns</th>
+        <th>RLS Policy</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>profiles</strong></td>
+        <td>id (UUID)</td>
+        <td>username, created_at</td>
+        <td>Public read, owner write</td>
+      </tr>
+      <tr>
+        <td><strong>projects</strong></td>
+        <td>id (UUID)</td>
+        <td>user_id, title, description, cover_image, genre, is_published, visibility, creator_name</td>
+        <td>Owner write, public read if published</td>
+      </tr>
+      <tr>
+        <td><strong>scenes</strong></td>
+        <td>id (UUID)</td>
+        <td>project_id, data (JSONB), updated_at</td>
+        <td>Owner write, public read if project published</td>
+      </tr>
+      <tr>
+        <td><strong>audio_tracks</strong></td>
+        <td>id (UUID)</td>
+        <td>user_id, project_id, title, tempo, scale, instruments, patterns, audio_url, is_published</td>
+        <td>Owner write, public read if published</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>6. Build Performance & Metrics</h2>
+  <ul>
+    <li><strong>Vite Production Build Time</strong>: ~470 ms</li>
+    <li><strong>Application Bundle (index.js)</strong>: 416 kB</li>
+    <li><strong>Tone.js Vendor Chunk</strong>: 260 kB</li>
+    <li><strong>Supabase Vendor Chunk</strong>: 195 kB</li>
+    <li><strong>CSS Bundle</strong>: 23 kB</li>
+  </ul>
+</body>
+</html>
