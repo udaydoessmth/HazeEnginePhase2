@@ -112,6 +112,16 @@ app.get('/api/projects', (_req, res) => {
 app.post('/api/projects', (req, res) => {
   const data = loadData()
   const { id, ...restBody } = req.body
+  const existingIdx = id ? data.projects.findIndex(p => p.id === id) : -1
+  if (existingIdx !== -1) {
+    data.projects[existingIdx] = {
+      ...data.projects[existingIdx],
+      ...restBody,
+      updatedAt: new Date().toISOString(),
+    }
+    saveData(data)
+    return res.json(data.projects[existingIdx])
+  }
   const project = {
     ...restBody,
     id: id || crypto.randomUUID(),
@@ -175,6 +185,16 @@ app.post('/api/audio-tracks', (req, res) => {
   const data = loadData()
   if (!data.audioTracks) data.audioTracks = []
   const { id, ...restBody } = req.body
+  const existingIdx = id ? data.audioTracks.findIndex(t => t.id === id) : -1
+  if (existingIdx !== -1) {
+    data.audioTracks[existingIdx] = {
+      ...data.audioTracks[existingIdx],
+      ...restBody,
+      updatedAt: new Date().toISOString(),
+    }
+    saveData(data)
+    return res.json(data.audioTracks[existingIdx])
+  }
   const track = {
     ...restBody,
     id: id || crypto.randomUUID(),

@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import LogoMark from '../components/ui/LogoMark'
 
 function useInView(ref) {
   const [inView, setInView] = useState(false)
@@ -49,25 +50,6 @@ function Inner({ children, className = '' }) {
     >
       {children}
     </div>
-  )
-}
-
-/* Logo mark — ꛅ in Symbol Craze style */
-function LogoMark({ size = 28, className = '' }) {
-  return (
-    <span
-      className={className}
-      style={{
-        fontFamily: '"Symbol Craze", serif',
-        fontSize: `${size}px`,
-        lineHeight: 1,
-        color: 'currentColor',
-        display: 'inline-block',
-      }}
-      aria-hidden="true"
-    >
-      ꛅ
-    </span>
   )
 }
 

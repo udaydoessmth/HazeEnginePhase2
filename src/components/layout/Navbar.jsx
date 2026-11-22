@@ -1,21 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-
-function LogoMark({ size = 24 }) {
-  return (
-    <span
-      style={{
-        fontFamily: '"Symbol Craze", serif',
-        fontSize: `${size}px`,
-        lineHeight: 1,
-        display: 'inline-block',
-      }}
-      aria-hidden="true"
-    >
-      ꛅ
-    </span>
-  )
-}
+import LogoMark from '../ui/LogoMark'
 
 export default function Navbar() {
   const { user, localLogout } = useAuth()
