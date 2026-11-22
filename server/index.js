@@ -2,11 +2,15 @@ import express from 'express'
 import cors from 'cors'
 import multer from 'multer'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'fs'
-import { join, dirname } from 'path'
+import { join, dirname, basename, resolve } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
+
+// Whitelist allowed upload types to prevent path traversal
+const ALLOWED_UPLOAD_TYPES = new Set(['audio-drafts', 'audio-complete', 'assets', 'images'])
+const isValidType = (t) => ALLOWED_UPLOAD_TYPES.has(t)
 
 // Ensure upload directories exist
 const dirs = ['uploads/audio-drafts', 'uploads/audio-complete', 'uploads/assets', 'uploads/images', 'data']
@@ -25,21 +29,27 @@ app.use('/uploads', express.static(join(ROOT, 'uploads')))
 // ===== FILE STORAGE =====
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    const type = req.params.type || 'assets'
+    const rawType = req.params.type || 'assets'
+    const type = isValidType(rawType) ? rawType : 'assets'
     const dir = join(ROOT, 'uploads', type)
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
     cb(null, dir)
   },
   filename: (_req, file, cb) => {
     const unique = Date.now() + '-' + Math.round(Math.random() * 1e9)
-    const ext = file.originalname.split('.').pop()
+    const ext = basename(file.originalname).split('.').pop().replace(/[^a-zA-Z0-9]/g, '')
     cb(null, `${unique}.${ext}`)
   },
 })
 const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } })
 
 // Upload file
-app.post('/api/upload/:type', upload.single('file'), (req, res) => {
+app.post('/api/upload/:type', (req, res, next) => {
+  if (!isValidType(req.params.type)) {
+    return res.status(400).json({ error: 'Invalid upload type' })
+  }
+  next()
+}, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided' })
   const url = `/uploads/${req.params.type}/${req.file.filename}`
   res.json({ url, filename: req.file.filename })
@@ -47,6 +57,9 @@ app.post('/api/upload/:type', upload.single('file'), (req, res) => {
 
 // List files in a category
 app.get('/api/files/:type', (req, res) => {
+  if (!isValidType(req.params.type)) {
+    return res.status(400).json({ error: 'Invalid category' })
+  }
   const dir = join(ROOT, 'uploads', req.params.type)
   if (!existsSync(dir)) return res.json({ files: [] })
   const files = readdirSync(dir).map(f => ({
@@ -58,12 +71,23 @@ app.get('/api/files/:type', (req, res) => {
 
 // Delete file
 app.delete('/api/files/:type/:filename', (req, res) => {
-  const filepath = join(ROOT, 'uploads', req.params.type, req.params.filename)
-  if (existsSync(filepath)) {
+  if (!isValidType(req.params.type)) {
+    return res.status(400).json({ error: 'Invalid category' })
+  }
+  const safeFilename = basename(req.params.filename)
+  const uploadsDir = resolve(ROOT, 'uploads', req.params.type)
+  const filepath = resolve(uploadsDir, safeFilename)
+
+  // Ensure path is strictly within the intended uploads subdirectory
+  if (!filepath.startsWith(uploadsDir) || !existsSync(filepath)) {
+    return res.status(404).json({ error: 'File not found' })
+  }
+
+  try {
     unlinkSync(filepath)
     res.json({ success: true })
-  } else {
-    res.status(404).json({ error: 'File not found' })
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete file' })
   }
 })
 
@@ -186,8 +210,15 @@ app.post('/api/audio-export', (req, res) => {
   if (!audioData) return res.status(400).json({ error: 'No audio data' })
 
   const buffer = Buffer.from(audioData, 'base64')
-  const fname = filename || `track-${Date.now()}.mp3`
-  const filepath = join(ROOT, 'uploads', 'audio-complete', fname)
+  const safeName = basename(filename || `track-${Date.now()}.mp3`).replace(/[^a-zA-Z0-9._-]/g, '')
+  const fname = safeName || `track-${Date.now()}.mp3`
+  const dir = resolve(ROOT, 'uploads', 'audio-complete')
+  const filepath = resolve(dir, fname)
+
+  if (!filepath.startsWith(dir)) {
+    return res.status(400).json({ error: 'Invalid file path' })
+  }
+
   writeFileSync(filepath, buffer)
   res.json({ url: `/uploads/audio-complete/${fname}` })
 })
