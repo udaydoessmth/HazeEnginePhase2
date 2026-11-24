@@ -48,6 +48,7 @@ export default function App() {
           {/* Protected routes */}
           <Route path="/dashboard" element={<ProtectedRoute><Navbar /><Dashboard /></ProtectedRoute>} />
           <Route path="/my-publications" element={<ProtectedRoute><MyPublicationsPage /></ProtectedRoute>} />
+          <Route path="/daw" element={<ProtectedRoute><DAWPage /></ProtectedRoute>} />
           <Route path="/project/:projectId/editor" element={<ProtectedRoute><SceneEditor /></ProtectedRoute>} />
           <Route path="/project/:projectId/daw" element={<ProtectedRoute><DAWPage /></ProtectedRoute>} />
           <Route path="/project/:projectId/daw/:trackId" element={<ProtectedRoute><DAWPage /></ProtectedRoute>} />

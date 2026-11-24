@@ -111,14 +111,26 @@ export default function MyPublicationsPage() {
             <p style={{ fontFamily: 'monospace', fontSize: '11px', color: 'rgba(255,255,255,0.2)', letterSpacing: '0.1em', marginBottom: '24px' }}>
               You haven't published any {tab === 'My Games' ? 'games' : 'music'} yet.
             </p>
-            <button
-              onClick={() => navigate('/dashboard')}
-              style={{ fontFamily: 'monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '10px 24px', background: 'transparent', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', transition: 'all 0.15s' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; e.currentTarget.style.color = '#fff' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}
-            >
-              Go to Dashboard
-            </button>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {tab === 'My Music' && (
+                <button
+                  onClick={() => navigate('/daw')}
+                  style={{ fontFamily: 'monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '10px 24px', background: '#fff', color: '#0a0a0a', border: 'none', cursor: 'pointer', fontWeight: '700', transition: 'opacity 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.85' }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
+                >
+                  ♪ Make Music
+                </button>
+              )}
+              <button
+                onClick={() => navigate('/dashboard')}
+                style={{ fontFamily: 'monospace', fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '10px 24px', background: 'transparent', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.15)', cursor: 'pointer', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; e.currentTarget.style.color = '#fff' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}
+              >
+                Go to Dashboard
+              </button>
+            </div>
           </div>
         )}
 

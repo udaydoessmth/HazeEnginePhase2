@@ -14,7 +14,7 @@ import { useState, useRef, useEffect } from 'react'
 const GENRES_GAME = ['Romance', 'Mystery', 'Horror', 'Fantasy', 'Sci-Fi', 'Drama', 'Comedy', 'Action', 'Slice of Life', 'Other']
 const GENRES_MUSIC = ['Electronic', 'Ambient', 'Lo-Fi', 'Jazz', 'Classical', 'Hip-Hop', 'Pop', 'Experimental', 'Other']
 
-export default function PublishModal({ isOpen, onClose, type = 'game', defaultTitle = '', onPublish, publishing }) {
+export default function PublishModal({ isOpen, onClose, type = 'game', defaultTitle = '', onPublish, publishing, publishError }) {
   const [title, setTitle] = useState(defaultTitle)
   const [description, setDescription] = useState('')
   const [genre, setGenre] = useState('')
@@ -221,6 +221,14 @@ export default function PublishModal({ isOpen, onClose, type = 'game', defaultTi
 
           {/* Actions */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+            {publishError && (
+              <p style={{
+                fontFamily: 'monospace', fontSize: '10px', color: '#ff6666',
+                letterSpacing: '0.05em', flex: 1, alignSelf: 'center', margin: 0,
+              }}>
+                ⚠ {publishError}
+              </p>
+            )}
             <button
               onClick={onClose}
               disabled={publishing}

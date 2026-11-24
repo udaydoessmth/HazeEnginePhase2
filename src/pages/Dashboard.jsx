@@ -97,26 +97,48 @@ export default function Dashboard() {
             </h1>
           </div>
 
-          <button
-            onClick={() => setShowCreate(true)}
-            style={{
-              fontFamily: 'monospace',
-              fontSize: '11px',
-              letterSpacing: '0.15em',
-              textTransform: 'uppercase',
-              padding: '12px 24px',
-              background: '#ffffff',
-              color: '#0a0a0a',
-              border: 'none',
-              cursor: 'pointer',
-              fontWeight: '600',
-              transition: 'opacity 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-          >
-            New Project
-          </button>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button
+              onClick={() => navigate('/daw')}
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '11px',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+                padding: '12px 24px',
+                background: 'transparent',
+                color: 'rgba(255,255,255,0.5)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                cursor: 'pointer',
+                fontWeight: '600',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; e.currentTarget.style.color = '#fff' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)' }}
+            >
+              ♪ Make Music
+            </button>
+            <button
+              onClick={() => setShowCreate(true)}
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '11px',
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+                padding: '12px 24px',
+                background: '#ffffff',
+                color: '#0a0a0a',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: '600',
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
+              New Project
+            </button>
+          </div>
         </div>
 
         {/* Loading */}

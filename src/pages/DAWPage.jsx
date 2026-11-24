@@ -129,6 +129,7 @@ export default function DAWPage() {
   const [showPublish, setShowPublish] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [publishedUrl, setPublishedUrl] = useState(null)
+  const [publishError, setPublishError] = useState(null)
   const patternsRef = useRef(null)
 
   const {
@@ -325,9 +326,8 @@ export default function DAWPage() {
           </ActionBtn>
 
           <ActionBtn
-            onClick={() => setShowPublish(true)}
-            disabled={!storeTrackId}
-            title={!storeTrackId ? 'Save the track first to enable publishing' : ''}
+            onClick={() => { setPublishError(null); setShowPublish(true) }}
+            disabled={false}
           >
             ↑ Publish
           </ActionBtn>
@@ -408,18 +408,20 @@ export default function DAWPage() {
       {/* Publish modal */}
       <PublishModal
         isOpen={showPublish}
-        onClose={() => setShowPublish(false)}
+        onClose={() => { setShowPublish(false); setPublishError(null) }}
         type="music"
         defaultTitle={trackTitle}
         publishing={publishing}
+        publishError={publishError}
         onPublish={async ({ title, description, genre, visibility, coverFile }) => {
           setPublishing(true)
+          setPublishError(null)
           try {
             // Save the track first (ensure we have a persisted trackId)
             await handleSave()
             const currentTrackId = useDawStore.getState().trackId
             if (!currentTrackId) {
-              console.error('[DAWPage] No trackId — save first')
+              setPublishError('Could not save track — please try saving manually first.')
               setPublishing(false)
               return
             }
@@ -432,6 +434,7 @@ export default function DAWPage() {
               audioBlob = audioBufferToWav(buffer)
             } catch (err) {
               console.error('[DAWPage] Audio render failed:', err)
+              // Non-fatal — publish without audio blob
             }
             // Upload cover image
             const coverImageUrl = coverFile ? await uploadCoverImage(coverFile) : null
@@ -452,10 +455,13 @@ export default function DAWPage() {
               const url = `${window.location.origin}/music/${currentTrackId}`
               setPublishedUrl(url)
               setShowPublish(false)
+              setPublishError(null)
             } else {
-              console.error('[DAWPage] publishTrack returned null — check Supabase/server errors')
+              setPublishError('Publish failed — check that you are logged in and try again.')
+              console.error('[DAWPage] publishTrack returned null')
             }
           } catch (err) {
+            setPublishError('Publish failed: ' + (err?.message || 'Unknown error'))
             console.error('[DAWPage] Publish failed:', err)
           }
           setPublishing(false)
