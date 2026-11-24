@@ -415,7 +415,7 @@ export default function DAWPage() {
         onPublish={async ({ title, description, genre, visibility, coverFile }) => {
           setPublishing(true)
           try {
-            // Save the track first
+            // Save the track first (ensure we have a persisted trackId)
             await handleSave()
             const currentTrackId = useDawStore.getState().trackId
             if (!currentTrackId) {
@@ -423,10 +423,12 @@ export default function DAWPage() {
               setPublishing(false)
               return
             }
+            // Read fresh patterns/instruments/tempo from the store (avoid stale closure values)
+            const { patterns: freshPatterns, instruments: freshInstruments, tempo: freshTempo } = useDawStore.getState()
             // Export audio to a WAV blob
             let audioBlob = null
             try {
-              const buffer = await renderToWav(patterns, instruments, tempo)
+              const buffer = await renderToWav(freshPatterns, freshInstruments, freshTempo)
               audioBlob = audioBufferToWav(buffer)
             } catch (err) {
               console.error('[DAWPage] Audio render failed:', err)
@@ -450,6 +452,8 @@ export default function DAWPage() {
               const url = `${window.location.origin}/music/${currentTrackId}`
               setPublishedUrl(url)
               setShowPublish(false)
+            } else {
+              console.error('[DAWPage] publishTrack returned null — check Supabase/server errors')
             }
           } catch (err) {
             console.error('[DAWPage] Publish failed:', err)
