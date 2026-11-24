@@ -10,6 +10,7 @@ ALTER TABLE projects ADD COLUMN IF NOT EXISTS visibility TEXT DEFAULT 'public';
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS creator_name TEXT;
 
 -- 2. Add publishing columns to audio_tracks table
+ALTER TABLE audio_tracks ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE audio_tracks ADD COLUMN IF NOT EXISTS cover_image TEXT;
 ALTER TABLE audio_tracks ADD COLUMN IF NOT EXISTS genre TEXT;
 ALTER TABLE audio_tracks ADD COLUMN IF NOT EXISTS visibility TEXT DEFAULT 'public';

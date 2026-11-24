@@ -233,7 +233,6 @@ export async function publishTrack(trackId, { title, description, coverImageUrl,
   // 2. Write publish metadata
   const patch = {
     title: title || 'Untitled Track',
-    description: description || '',
     cover_image: coverImageUrl || null,
     genre: genre || null,
     visibility: visibility || 'public',
@@ -251,14 +250,17 @@ export async function publishTrack(trackId, { title, description, coverImageUrl,
       .eq('id', trackId)
       .select()
       .single()
-    if (error) { console.error('[publish] track publish error:', error.message); return null }
+    if (error) {
+      console.error('[publish] track publish error:', error.message)
+      throw new Error(error.message)
+    }
     return data
   }
 
   const { ok, data } = await apiFetch(`/api/audio-tracks/${trackId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(patch),
+    body: JSON.stringify({ ...patch, description: description || '' }),
   })
   return ok ? data : null
 }
@@ -296,7 +298,7 @@ export async function fetchPublicMusic(searchQuery = '') {
   if (isSupabaseConfigured()) {
     let q = supabase
       .from('audio_tracks')
-      .select('id, title, description, cover_image, genre, visibility, published_at, user_id, audio_url, creator_name')
+      .select('id, title, cover_image, genre, visibility, published_at, user_id, audio_url, creator_name')
       .eq('is_published', true)
       .eq('visibility', 'public')
       .order('published_at', { ascending: false })
@@ -327,7 +329,7 @@ export async function fetchPublishedTrack(trackId) {
   if (isSupabaseConfigured()) {
     const { data, error } = await supabase
       .from('audio_tracks')
-      .select('id, title, description, cover_image, genre, visibility, is_published, published_at, user_id, audio_url, creator_name')
+      .select('id, title, cover_image, genre, visibility, is_published, published_at, user_id, audio_url, creator_name')
       .eq('id', trackId)
       .maybeSingle()
     if (error || !data || !data.is_published) return null
@@ -372,7 +374,7 @@ export async function fetchMyMusic(userId) {
   if (isSupabaseConfigured()) {
     const { data, error } = await supabase
       .from('audio_tracks')
-      .select('id, title, description, cover_image, genre, visibility, is_published, published_at, audio_url, updated_at')
+      .select('id, title, cover_image, genre, visibility, is_published, published_at, audio_url, updated_at')
       .eq('user_id', userId)
       .eq('is_published', true)
       .order('published_at', { ascending: false })
