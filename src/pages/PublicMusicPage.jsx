@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { fetchPublishedTrack, fetchCreatorName } from '../stores/publishStore'
+import { fetchPublishedTrack, fetchCreatorName, resolveTrackAudioUrl } from '../stores/publishStore'
 
 export default function PublicMusicPage() {
   const { trackId } = useParams()
   const [track, setTrack] = useState(null)
+  const [audioSrc, setAudioSrc] = useState(null)
   const [creatorName, setCreatorName] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -17,8 +18,11 @@ export default function PublicMusicPage() {
   const [duration, setDuration] = useState(0)
 
   useEffect(() => {
+    let objectUrlToRevoke = null
+    let cancelled = false
     const load = async () => {
       const data = await fetchPublishedTrack(trackId)
+      if (cancelled) return
       if (!data) { setError('Track not found or not published.'); setLoading(false); return }
       setTrack(data)
       // Use stored creator_name first; fall back to profiles lookup
@@ -26,11 +30,24 @@ export default function PublicMusicPage() {
         setCreatorName(data.creator_name)
       } else if (data.user_id) {
         const name = await fetchCreatorName(data.user_id)
-        if (name) setCreatorName(name)
+        if (!cancelled && name) setCreatorName(name)
+      }
+      const resolved = await resolveTrackAudioUrl(data)
+      if (cancelled) {
+        if (resolved?.isObjectUrl) URL.revokeObjectURL(resolved.url)
+        return
+      }
+      if (resolved) {
+        setAudioSrc(resolved.url)
+        if (resolved.isObjectUrl) objectUrlToRevoke = resolved.url
       }
       setLoading(false)
     }
     load()
+    return () => {
+      cancelled = true
+      if (objectUrlToRevoke) URL.revokeObjectURL(objectUrlToRevoke)
+    }
   }, [trackId])
 
   const togglePlay = () => {
@@ -150,11 +167,11 @@ export default function PublicMusicPage() {
         {!track?.description && <div style={{ height: '24px' }} />}
 
         {/* Audio Player */}
-        {track?.audio_url && !audioError ? (
+        {audioSrc && !audioError ? (
           <div style={{ width: '100%', maxWidth: '400px' }}>
             <audio
               ref={audioRef}
-              src={track.audio_url}
+              src={audioSrc}
               onTimeUpdate={e => setCurrentTime(e.target.currentTime)}
               onLoadedMetadata={e => setDuration(e.target.duration)}
               onEnded={() => setIsPlaying(false)}

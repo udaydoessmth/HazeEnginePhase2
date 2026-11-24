@@ -329,7 +329,7 @@ export async function fetchPublishedTrack(trackId) {
   if (isSupabaseConfigured()) {
     const { data, error } = await supabase
       .from('audio_tracks')
-      .select('id, title, cover_image, genre, visibility, is_published, published_at, user_id, audio_url, creator_name')
+      .select('id, title, cover_image, genre, visibility, is_published, published_at, user_id, audio_url, creator_name, tempo, instruments, patterns')
       .eq('id', trackId)
       .maybeSingle()
     if (error || !data || !data.is_published) return null
@@ -374,7 +374,7 @@ export async function fetchMyMusic(userId) {
   if (isSupabaseConfigured()) {
     const { data, error } = await supabase
       .from('audio_tracks')
-      .select('id, title, cover_image, genre, visibility, is_published, published_at, audio_url, updated_at')
+      .select('id, title, cover_image, genre, visibility, is_published, published_at, audio_url, updated_at, tempo, instruments, patterns')
       .eq('user_id', userId)
       .eq('is_published', true)
       .order('published_at', { ascending: false })
@@ -385,4 +385,25 @@ export async function fetchMyMusic(userId) {
   const { ok, data } = await apiFetch('/api/audio-tracks')
   if (!ok) return []
   return (data || []).filter(t => t.isPublished || t.is_published)
+}
+
+/**
+ * Resolve a playable audio URL for a track.
+ * Uses track.audio_url if available; otherwise renders track.patterns to a WAV blob URL.
+ * Returns { url, isObjectUrl } or null if unavailable.
+ */
+export async function resolveTrackAudioUrl(track) {
+  if (!track) return null
+  if (track.audio_url) return { url: track.audio_url, isObjectUrl: false }
+  const patterns = track.patterns ?? track.patternData
+  if (!patterns || Object.keys(patterns).length === 0) return null
+  try {
+    const { renderToWav, audioBufferToWav } = await import('../audio/exporter')
+    const buffer = await renderToWav(patterns, track.instruments || {}, track.tempo || 120)
+    const wavBlob = audioBufferToWav(buffer)
+    return { url: URL.createObjectURL(wavBlob), isObjectUrl: true }
+  } catch (err) {
+    console.error('[publish] Failed to render fallback track audio:', err)
+    return null
+  }
 }

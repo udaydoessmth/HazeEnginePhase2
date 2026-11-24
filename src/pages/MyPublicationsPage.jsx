@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/layout/Navbar'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchMyGames, fetchMyMusic, unpublishProject, unpublishTrack } from '../stores/publishStore'
+import { fetchMyGames, fetchMyMusic, unpublishProject, unpublishTrack, resolveTrackAudioUrl } from '../stores/publishStore'
 
 const TABS = ['My Games', 'My Music']
 
@@ -13,6 +13,30 @@ export default function MyPublicationsPage() {
   const [games, setGames] = useState([])
   const [music, setMusic] = useState([])
   const [loading, setLoading] = useState(true)
+
+  // Inline audio player state for My Music
+  const audioRef = useRef(null)
+  const objectUrlsRef = useRef({})
+  const [playingTrackId, setPlayingTrackId] = useState(null)
+  const [loadingTrackId, setLoadingTrackId] = useState(null)
+
+  const stopAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+    }
+    setPlayingTrackId(null)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+      }
+      Object.values(objectUrlsRef.current).forEach(url => URL.revokeObjectURL(url))
+      objectUrlsRef.current = {}
+    }
+  }, [])
 
   const load = useCallback(async () => {
     if (!user) return
@@ -34,8 +58,46 @@ export default function MyPublicationsPage() {
   }
 
   const handleUnpublishTrack = async (id) => {
+    if (playingTrackId === id) stopAudio()
     await unpublishTrack(id)
     setMusic(m => m.filter(x => x.id !== id))
+  }
+
+  const handleTogglePlay = async (track) => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    if (playingTrackId === track.id) {
+      audio.pause()
+      setPlayingTrackId(null)
+      return
+    }
+
+    setLoadingTrackId(track.id)
+    try {
+      let url = objectUrlsRef.current[track.id] || track.audio_url
+      if (!url) {
+        const resolved = await resolveTrackAudioUrl(track)
+        if (!resolved) {
+          setLoadingTrackId(null)
+          return
+        }
+        url = resolved.url
+        if (resolved.isObjectUrl) {
+          objectUrlsRef.current[track.id] = url
+        }
+      }
+      if (audio.src !== url) {
+        audio.src = url
+      }
+      await audio.play()
+      setPlayingTrackId(track.id)
+    } catch (err) {
+      console.error('[MyPublications] Play failed:', err)
+      setPlayingTrackId(null)
+    } finally {
+      setLoadingTrackId(null)
+    }
   }
 
   const copyLink = (url) => {
@@ -163,6 +225,9 @@ export default function MyPublicationsPage() {
                   visibility={track.visibility}
                   type="music"
                   url={`${window.location.origin}/music/${track.id}`}
+                  isPlaying={playingTrackId === track.id}
+                  isLoadingAudio={loadingTrackId === track.id}
+                  onTogglePlay={() => handleTogglePlay(track)}
                   onOpen={() => window.open(`/music/${track.id}`, '_blank')}
                   onCopy={() => copyLink(`${window.location.origin}/music/${track.id}`)}
                   onUnpublish={() => handleUnpublishTrack(track.id)}
@@ -171,12 +236,18 @@ export default function MyPublicationsPage() {
             }
           </div>
         )}
+      <audio
+        ref={audioRef}
+        onEnded={() => setPlayingTrackId(null)}
+        onError={() => setPlayingTrackId(null)}
+        style={{ display: 'none' }}
+      />
       </div>
     </div>
   )
 }
 
-function PublicationRow({ title, subtitle, coverImage, publishedAt, visibility, type = 'music', url, onOpen, onCopy, onUnpublish }) {
+function PublicationRow({ title, subtitle, coverImage, publishedAt, visibility, type = 'music', url, isPlaying, isLoadingAudio, onTogglePlay, onOpen, onCopy, onUnpublish }) {
   const [hovered, setHovered] = useState(false)
   const [copied, setCopied] = useState(false)
   const [confirmUnpublish, setConfirmUnpublish] = useState(false)
@@ -243,17 +314,40 @@ function PublicationRow({ title, subtitle, coverImage, publishedAt, visibility, 
       </div>
 
       {/* Actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: hovered ? 1 : 0, transition: 'opacity 0.15s', flexShrink: 0 }}>
-        <SmallBtn onClick={onOpen}>Open ↗</SmallBtn>
-        <SmallBtn onClick={handleCopy}>{copied ? '✓ Copied' : 'Copy Link'}</SmallBtn>
-        {confirmUnpublish ? (
-          <>
-            <SmallBtn onClick={onUnpublish} danger>Confirm</SmallBtn>
-            <SmallBtn onClick={() => setConfirmUnpublish(false)}>Cancel</SmallBtn>
-          </>
-        ) : (
-          <SmallBtn onClick={() => setConfirmUnpublish(true)} danger>Unpublish</SmallBtn>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        {type === 'music' && onTogglePlay && (
+          <button
+            onClick={onTogglePlay}
+            disabled={isLoadingAudio}
+            style={{
+              fontFamily: 'monospace',
+              fontSize: '10px',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              padding: '6px 14px',
+              background: isPlaying ? '#fff' : 'transparent',
+              border: `1px solid ${isPlaying ? '#fff' : 'rgba(255,255,255,0.25)'}`,
+              color: isPlaying ? '#0a0a0a' : '#fff',
+              cursor: isLoadingAudio ? 'wait' : 'pointer',
+              fontWeight: '700',
+              transition: 'all 0.15s',
+            }}
+          >
+            {isLoadingAudio ? '...' : isPlaying ? '⏸ Pause' : '▶ Play'}
+          </button>
         )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: hovered ? 1 : 0, transition: 'opacity 0.15s' }}>
+          <SmallBtn onClick={onOpen}>Open ↗</SmallBtn>
+          <SmallBtn onClick={handleCopy}>{copied ? '✓ Copied' : 'Copy Link'}</SmallBtn>
+          {confirmUnpublish ? (
+            <>
+              <SmallBtn onClick={onUnpublish} danger>Confirm</SmallBtn>
+              <SmallBtn onClick={() => setConfirmUnpublish(false)}>Cancel</SmallBtn>
+            </>
+          ) : (
+            <SmallBtn onClick={() => setConfirmUnpublish(true)} danger>Unpublish</SmallBtn>
+          )}
+        </div>
       </div>
     </div>
   )
